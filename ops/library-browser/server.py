@@ -37,6 +37,8 @@ class CandidatePreviewStore:
 
     def put(self, candidate):
         with self._lock:
+            if self._closed:
+                raise RuntimeError("candidate preview store is closed")
             self._purge_expired()
             expires_at = self._clock() + self._ttl_seconds
             token = self._candidate_store.put(candidate)
@@ -109,10 +111,10 @@ class LibraryServer(ThreadingHTTPServer):
         self._candidate_store = candidate_store
 
     def server_close(self):
+        super().server_close()
         close = getattr(self._candidate_store, "close", None)
         if close is not None:
             close()
-        super().server_close()
 
 
 def format_size(size):
@@ -260,10 +262,19 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 )
                 return
             results = []
-            with candidate_lock:
-                for candidate in candidates:
-                    token = candidate_store.put(candidate)
-                    results.append((token, candidate))
+            try:
+                with candidate_lock:
+                    for candidate in candidates:
+                        token = candidate_store.put(candidate)
+                        results.append((token, candidate))
+            except RuntimeError:
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Request desk unavailable",
+                    "The request desk is unavailable right now. Please try again later.",
+                    send_body,
+                )
+                return
             self.send_html(request_results(results), send_body)
 
         def send_request_confirmation(self, send_body):

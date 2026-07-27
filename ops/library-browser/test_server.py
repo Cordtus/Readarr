@@ -76,6 +76,22 @@ class FakeCandidateStore:
         self.candidates.pop(token, None)
 
 
+class RecordingCandidateStore:
+    def __init__(self, clock):
+        self._store = readarr.CandidateStore(ttl_seconds=120, clock=clock)
+        self.last_token = None
+
+    def put(self, candidate):
+        self.last_token = self._store.put(candidate)
+        return self.last_token
+
+    def take(self, token):
+        return self._store.take(token)
+
+    def discard(self, token):
+        self._store.discard(token)
+
+
 class FakeTimer:
     timers = []
 
@@ -104,15 +120,39 @@ class CandidatePreviewStoreTest(unittest.TestCase):
     def test_expired_preview_is_removed_by_timer_without_a_later_handler_request(self):
         clock = [0]
         FakeTimer.timers = []
+        backing_store = FakeCandidateStore()
         with mock.patch.object(server.threading, "Timer", FakeTimer):
             previews = server.CandidatePreviewStore(
-                FakeCandidateStore(), ttl_seconds=60, clock=lambda: clock[0]
+                backing_store, ttl_seconds=60, clock=lambda: clock[0]
             )
             token = previews.put({"title": "A candidate"})
             clock[0] = 60
             FakeTimer.run_due(clock[0])
 
             self.assertNotIn(token, previews._previews)
+            self.assertEqual(backing_store.candidates, {})
+
+    def test_put_after_close_rejects_without_retaining_a_backing_candidate(self):
+        backing_store = FakeCandidateStore()
+        previews = server.CandidatePreviewStore(backing_store)
+        previews.close()
+
+        with self.assertRaisesRegex(RuntimeError, "closed"):
+            previews.put({"title": "A candidate"})
+
+        self.assertEqual(backing_store.candidates, {})
+
+
+class BlockingReadarrClient(FakeReadarrClient):
+    def __init__(self):
+        super().__init__()
+        self.search_started = threading.Event()
+        self.release_search = threading.Event()
+
+    def search(self, term):
+        self.search_started.set()
+        self.release_search.wait(5)
+        return super().search(term)
 
 
 class LibraryBrowserTest(unittest.TestCase):
@@ -315,6 +355,47 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 400)
         self.assertIn("no longer available", body.decode())
         self.assertEqual(self.readarr_client.requests, [])
+
+    def test_server_close_cleans_up_candidates_added_by_an_inflight_search(self):
+        clock = [0]
+        readarr_client = BlockingReadarrClient()
+        backing_store = RecordingCandidateStore(lambda: clock[0])
+        FakeTimer.timers = []
+        with mock.patch.object(server.threading, "Timer", FakeTimer):
+            previews = server.CandidatePreviewStore(
+                backing_store, ttl_seconds=60, clock=lambda: clock[0]
+            )
+            self.restart_server(readarr_client, previews)
+            result = {}
+
+            def search():
+                connection = HTTPConnection("127.0.0.1", self.httpd.server_port)
+                try:
+                    connection.request("GET", "/request/search/?term=Concurrent")
+                    response = connection.getresponse()
+                    result["status"] = response.status
+                    response.read()
+                except OSError:
+                    result["closed"] = True
+                finally:
+                    connection.close()
+
+            request_thread = threading.Thread(target=search)
+            request_thread.start()
+            self.assertTrue(readarr_client.search_started.wait(2))
+            close_thread = threading.Thread(target=self.httpd.server_close)
+            close_thread.start()
+            readarr_client.release_search.set()
+            request_thread.join(5)
+            close_thread.join(5)
+
+        self.assertFalse(request_thread.is_alive())
+        self.assertFalse(close_thread.is_alive())
+        self.assertIn("status", result)
+        self.assertIsNone(backing_store.take(backing_store.last_token))
+        self.assertFalse(
+            any(timer.started and not timer.cancelled for timer in FakeTimer.timers)
+        )
 
     def test_confirmation_post_requests_candidate_once(self):
         token, _ = self.search_for_candidate()
