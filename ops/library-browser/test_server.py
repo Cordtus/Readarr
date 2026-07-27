@@ -3,6 +3,7 @@ import tempfile
 import threading
 import urllib.parse
 import unittest
+from unittest import mock
 from http.client import HTTPConnection
 from pathlib import Path
 
@@ -55,6 +56,60 @@ class FakeExpiringCandidateStore:
         candidate = self.peek(token)
         self.candidates.pop(token, None)
         return candidate
+
+
+class FakeCandidateStore:
+    def __init__(self):
+        self.candidates = {}
+        self.next_token = 0
+
+    def put(self, candidate):
+        self.next_token += 1
+        token = "candidate-{}".format(self.next_token)
+        self.candidates[token] = candidate
+        return token
+
+    def take(self, token):
+        return self.candidates.pop(token, None)
+
+
+class FakeTimer:
+    timers = []
+
+    def __init__(self, delay, callback, args=None, kwargs=None):
+        self.delay = delay
+        self.callback = lambda: callback(*(args or ()), **(kwargs or {}))
+        self.cancelled = False
+        self.started = False
+
+    def start(self):
+        self.started = True
+        self.timers.append(self)
+
+    def cancel(self):
+        self.cancelled = True
+
+    @classmethod
+    def run_due(cls, now):
+        for timer in list(cls.timers):
+            if timer.started and not timer.cancelled and timer.delay <= now:
+                timer.cancelled = True
+                timer.callback()
+
+
+class CandidatePreviewStoreTest(unittest.TestCase):
+    def test_expired_preview_is_removed_by_timer_without_a_later_handler_request(self):
+        clock = [0]
+        FakeTimer.timers = []
+        with mock.patch.object(server.threading, "Timer", FakeTimer):
+            previews = server.CandidatePreviewStore(
+                FakeCandidateStore(), ttl_seconds=60, clock=lambda: clock[0]
+            )
+            token = previews.put({"title": "A candidate"})
+            clock[0] = 60
+            FakeTimer.run_due(clock[0])
+
+            self.assertNotIn(token, previews._previews)
 
 
 class LibraryBrowserTest(unittest.TestCase):

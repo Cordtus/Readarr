@@ -32,31 +32,84 @@ class CandidatePreviewStore:
         self._ttl_seconds = ttl_seconds
         self._clock = clock
         self._previews = {}
+        self._lock = threading.Lock()
+        self._closed = False
 
     def put(self, candidate):
-        self._purge_expired()
-        expires_at = self._clock() + self._ttl_seconds
-        token = self._candidate_store.put(candidate)
-        self._previews[token] = (expires_at, candidate)
-        return token
+        with self._lock:
+            self._purge_expired()
+            expires_at = self._clock() + self._ttl_seconds
+            token = self._candidate_store.put(candidate)
+            marker = object()
+            self._schedule_expiry(token, expires_at, candidate, marker)
+            return token
 
     def peek(self, token):
-        self._purge_expired()
-        preview = self._previews.get(token)
-        return preview[1] if preview is not None else None
+        with self._lock:
+            self._purge_expired()
+            preview = self._previews.get(token)
+            return preview[1] if preview is not None else None
 
     def take(self, token):
-        self._previews.pop(token, None)
-        return self._candidate_store.take(token)
+        with self._lock:
+            preview = self._previews.pop(token, None)
+            if preview is not None:
+                preview[2].cancel()
+            return self._candidate_store.take(token)
+
+    def close(self):
+        with self._lock:
+            self._closed = True
+            for _, _, timer, _ in self._previews.values():
+                timer.cancel()
+            self._previews.clear()
+
+    def _schedule_expiry(self, token, expires_at, candidate, marker):
+        delay = max(0, expires_at - self._clock())
+        timer = threading.Timer(delay, self._expire, args=(token, marker))
+        timer.daemon = True
+        self._previews[token] = (expires_at, candidate, timer, marker)
+        timer.start()
+
+    def _expire(self, token, marker):
+        with self._lock:
+            preview = self._previews.get(token)
+            if self._closed or preview is None or preview[3] is not marker:
+                return
+            expires_at, candidate, _, _ = preview
+            if self._clock() < expires_at:
+                self._schedule_expiry(token, expires_at, candidate, marker)
+                return
+            self._previews.pop(token, None)
 
     def _purge_expired(self):
         now = self._clock()
         expired_tokens = [
-            token for token, (expires_at, _) in self._previews.items()
+            token for token, (expires_at, _, _, _) in self._previews.items()
             if now >= expires_at
         ]
         for token in expired_tokens:
-            self._previews.pop(token, None)
+            _, _, timer, _ = self._previews.pop(token)
+            timer.cancel()
+
+
+def request_candidate_store(candidate_store=None):
+    candidate_store = candidate_store or CandidateStore()
+    if hasattr(candidate_store, "peek"):
+        return candidate_store
+    return CandidatePreviewStore(candidate_store)
+
+
+class LibraryServer(ThreadingHTTPServer):
+    def __init__(self, server_address, request_handler_class, candidate_store):
+        super().__init__(server_address, request_handler_class)
+        self._candidate_store = candidate_store
+
+    def server_close(self):
+        close = getattr(self._candidate_store, "close", None)
+        if close is not None:
+            close()
+        super().server_close()
 
 
 def format_size(size):
@@ -76,9 +129,7 @@ def url_path(path):
 
 def create_handler(roots, readarr_client=None, candidate_store=None):
     resolved_roots = {name: Path(root).resolve() for name, root in roots.items()}
-    candidate_store = candidate_store or CandidateStore()
-    if not hasattr(candidate_store, "peek"):
-        candidate_store = CandidatePreviewStore(candidate_store)
+    candidate_store = request_candidate_store(candidate_store)
     candidate_lock = threading.Lock()
 
     class LibraryHandler(BaseHTTPRequestHandler):
@@ -440,8 +491,9 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
 
 def create_server(host, port, books_root, audiobooks_root, readarr_client=None, candidate_store=None):
     roots = {"Books": Path(books_root), "Audiobooks": Path(audiobooks_root)}
-    return ThreadingHTTPServer(
-        (host, port), create_handler(roots, readarr_client, candidate_store)
+    candidate_store = request_candidate_store(candidate_store)
+    return LibraryServer(
+        (host, port), create_handler(roots, readarr_client, candidate_store), candidate_store
     )
 
 
