@@ -31,7 +31,8 @@ while :; do
         --host 0.0.0.0 \
         --port 8090 \
         --books-root /plex/Books \
-        --audiobooks-root /plex/Audiobooks &
+        --audiobooks-root /plex/Audiobooks \
+        --readarr-config /home/sv/library-browser/readarr-request.json &
     child_pid=$!
     wait "$child_pid"
     status=$?

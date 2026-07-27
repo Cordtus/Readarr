@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import mimetypes
 import posixpath
 import threading
@@ -10,7 +11,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from readarr import CandidateStore, ReadarrError
+from readarr import CandidateStore, ReadarrClient, ReadarrConfiguration, ReadarrError
 from templates import (
     catalog,
     landing,
@@ -511,14 +512,51 @@ def create_server(host, port, books_root, audiobooks_root, readarr_client=None, 
     )
 
 
-def main():
+def parse_args(arguments=None):
     parser = argparse.ArgumentParser(description="Readarr Library Browser")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--books-root", required=True)
     parser.add_argument("--audiobooks-root", required=True)
-    args = parser.parse_args()
-    server = create_server(args.host, args.port, args.books_root, args.audiobooks_root)
+    parser.add_argument("--readarr-config", type=Path)
+    return parser.parse_args(arguments)
+
+
+def load_readarr_client(config_path, log=print):
+    if config_path is None:
+        return None
+    try:
+        with Path(config_path).open(encoding="utf-8") as config_file:
+            values = json.load(config_file)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        log("Readarr request desk unavailable: configuration could not be read")
+        return None
+    try:
+        if not isinstance(values, dict):
+            raise ReadarrError("Readarr configuration must be a JSON object")
+        configuration = ReadarrConfiguration(
+            root_folder_path=values["rootFolderPath"],
+            quality_profile_id=values["qualityProfileId"],
+            metadata_profile_id=values["metadataProfileId"],
+            monitor=values["monitor"],
+            monitor_new_items=values["monitorNewItems"],
+        )
+        return ReadarrClient(values["url"], values["apiKey"], configuration)
+    except (KeyError, TypeError, ValueError, ReadarrError):
+        log("Readarr request desk unavailable: configuration is invalid")
+        return None
+
+
+def main():
+    args = parse_args()
+    readarr_client = load_readarr_client(args.readarr_config)
+    server = create_server(
+        args.host,
+        args.port,
+        args.books_root,
+        args.audiobooks_root,
+        readarr_client=readarr_client,
+    )
     print("Readarr Library Browser listening on {}:{}".format(args.host, args.port), flush=True)
     try:
         server.serve_forever()

@@ -1,4 +1,5 @@
 import os
+import json
 import tempfile
 import threading
 import urllib.parse
@@ -10,6 +11,17 @@ from pathlib import Path
 import readarr
 import server
 import templates
+
+
+READARR_REQUEST_CONFIG = {
+    "url": "https://readarr.example.test",
+    "apiKey": "test-readarr-api-key",
+    "rootFolderPath": "/plex/Books",
+    "qualityProfileId": 4,
+    "metadataProfileId": 2,
+    "monitor": "all",
+    "monitorNewItems": "all",
+}
 
 
 class FakeReadarrClient:
@@ -141,6 +153,70 @@ class CandidatePreviewStoreTest(unittest.TestCase):
             previews.put({"title": "A candidate"})
 
         self.assertEqual(backing_store.candidates, {})
+
+
+class ReadarrStartupConfigurationTest(unittest.TestCase):
+    def test_parse_args_accepts_config_path_without_an_api_key_option(self):
+        args = server.parse_args([
+            "--books-root", "/plex/Books",
+            "--audiobooks-root", "/plex/Audiobooks",
+            "--readarr-config", "/home/sv/library-browser/readarr-request.json",
+        ])
+
+        self.assertEqual(
+            args.readarr_config,
+            Path("/home/sv/library-browser/readarr-request.json"),
+        )
+        self.assertNotIn("api_key", vars(args))
+
+    def test_valid_json_configuration_constructs_a_readarr_client(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "readarr-request.json"
+            config_path.write_text(json.dumps(READARR_REQUEST_CONFIG), encoding="utf-8")
+
+            client = server.load_readarr_client(config_path)
+
+        self.assertIsInstance(client, readarr.ReadarrClient)
+        self.assertEqual(client._base_url, READARR_REQUEST_CONFIG["url"])
+        self.assertEqual(client._api_key, READARR_REQUEST_CONFIG["apiKey"])
+        self.assertEqual(client._configuration.root_folder_path, "/plex/Books")
+        self.assertEqual(client._configuration.quality_profile_id, 4)
+        self.assertEqual(client._configuration.metadata_profile_id, 2)
+        self.assertEqual(client._configuration.monitor, "all")
+        self.assertEqual(client._configuration.monitor_new_items, "all")
+
+    def test_missing_configuration_leaves_the_request_desk_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "readarr-request.json"
+            messages = []
+
+            self.assertIsNone(server.load_readarr_client(config_path, messages.append))
+
+        self.assertEqual(len(messages), 1)
+
+    def test_invalid_configuration_values_are_not_reported(self):
+        secret = "DO_NOT_LOG_THIS_SECRET"
+        values = dict(READARR_REQUEST_CONFIG, url="http://[", apiKey=secret)
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "readarr-request.json"
+            config_path.write_text(json.dumps(values), encoding="utf-8")
+            messages = []
+
+            self.assertIsNone(server.load_readarr_client(config_path, messages.append))
+
+        self.assertEqual(len(messages), 1)
+        self.assertNotIn(secret, messages[0])
+
+
+class WatchdogInterfaceTest(unittest.TestCase):
+    def test_watchdog_passes_only_the_published_config_file_interface(self):
+        script = Path(__file__).with_name("run-library-browser.sh").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "--readarr-config /home/sv/library-browser/readarr-request.json",
+            script,
+        )
+        self.assertNotIn("--api-key", script)
 
 
 class BlockingReadarrClient(FakeReadarrClient):
@@ -445,6 +521,19 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 503)
         self.assertIn("unavailable", body.decode())
+
+        secret = "DO_NOT_LOG_THIS_SECRET"
+        with tempfile.TemporaryDirectory() as directory:
+            config_path = Path(directory) / "readarr-request.json"
+            config_path.write_text('{"apiKey": "' + secret + '",', encoding="utf-8")
+            messages = []
+            self.restart_server(server.load_readarr_client(config_path, messages.append))
+        response, body = self.request("GET", "/library/request/")
+
+        self.assertEqual(response.status, 503)
+        self.assertIn("unavailable", body.decode())
+        self.assertNotIn(secret, body.decode())
+        self.assertTrue(all(secret not in message for message in messages))
 
         self.restart_server(self.readarr_client)
         response, body = self.request(
