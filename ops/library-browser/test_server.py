@@ -1,3 +1,4 @@
+import os
 import tempfile
 import threading
 import unittest
@@ -16,7 +17,9 @@ class LibraryBrowserTest(unittest.TestCase):
         self.books.mkdir()
         self.audiobooks.mkdir()
         (self.books / "The <Book>.epub").write_bytes(b"book content")
-        (self.books / "Series <A>").mkdir()
+        series = self.books / "Series <A>"
+        series.mkdir()
+        (series / "Nested Book.epub").write_bytes(b"nested book")
         self.httpd = server.create_server(
             "127.0.0.1", 0, self.books, self.audiobooks
         )
@@ -64,6 +67,54 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertIn("Awaiting new stock", body.decode())
+
+    def test_audiobooks_catalog_uses_warm_audio_theme(self):
+        (self.audiobooks / "A listening tale.m4b").write_bytes(b"audio")
+
+        response, body = self.request("GET", "/Audiobooks/")
+        html = body.decode()
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("audio-catalog", html)
+        self.assertIn("--catalog-accent: var(--copper)", html)
+        self.assertIn("audio-detail", html)
+        self.assertIn("A listening tale.m4b", html)
+
+    def test_catalog_excludes_escaping_symlinks_but_keeps_in_root_symlinks(self):
+        outside = Path(self.temp_dir.name) / "outside"
+        outside.mkdir()
+        in_root_link = self.books / "In-root alias.epub"
+        escaping_link = self.books / "Escaping shelf"
+        try:
+            in_root_link.symlink_to(self.books / "The <Book>.epub")
+            escaping_link.symlink_to(outside, target_is_directory=True)
+        except (NotImplementedError, OSError):
+            self.skipTest("symlinks are not supported")
+
+        response, body = self.request("GET", "/Books/")
+        html = body.decode()
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("In-root alias.epub", html)
+        self.assertNotIn("Escaping shelf", html)
+
+    def test_open_directory_link_renders_nested_catalog_with_shelf_breadcrumb(self):
+        response, body = self.request("GET", "/Books/Series%20%3CA%3E/")
+        html = body.decode()
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("Series &lt;A&gt;", html)
+        self.assertIn("Nested Book.epub", html)
+        self.assertIn('href="/library/Books/"', html)
+        self.assertIn("/library/Books/Series%20%3CA%3E/Nested%20Book.epub", html)
+
+    def test_nested_directory_traversal_is_rejected(self):
+        response, body = self.request(
+            "GET", "/Books/Series%20%3CA%3E/%2e%2e/%2e%2e/etc/passwd"
+        )
+
+        self.assertIn(response.status, (403, 404))
+        self.assertNotIn(b"book content", body)
 
     def test_library_prefix_is_accepted_for_transparent_reverse_proxy(self):
         response, body = self.request("GET", "/library/Books/")

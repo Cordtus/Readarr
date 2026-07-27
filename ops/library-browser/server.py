@@ -70,31 +70,69 @@ def create_handler(roots):
             if send_body:
                 self.wfile.write(body)
 
-        def send_catalog(self, name, send_body):
-            root = resolved_roots[name]
+        def send_catalog(self, name, send_body, directory=None):
+            media_root = resolved_roots[name]
+            root = directory or media_root
             entries = []
             try:
-                children = sorted(
-                    (entry for entry in root.iterdir() if not entry.name.startswith(".")),
-                    key=lambda entry: (not entry.is_dir(), entry.name.casefold()),
-                )
-                for entry in children:
-                    stat = entry.stat()
-                    relative = entry.relative_to(root)
+                children = []
+                for entry in root.iterdir():
+                    if entry.name.startswith("."):
+                        continue
+                    try:
+                        resolved = entry.resolve()
+                        resolved.relative_to(root)
+                        if not resolved.exists():
+                            continue
+                    except (OSError, ValueError):
+                        continue
+                    children.append((entry, resolved))
+                children.sort(key=lambda pair: (not pair[1].is_dir(), pair[0].name.casefold()))
+                for entry, resolved in children:
+                    stat = resolved.stat()
+                    relative = entry.relative_to(media_root)
                     href = "/library/{}{}".format(name, url_path(relative))
-                    if entry.is_dir():
+                    is_dir = resolved.is_dir()
+                    if is_dir:
                         href += "/"
                     entries.append({
                         "name": entry.name,
                         "href": href,
-                        "is_dir": entry.is_dir(),
-                        "size": "Folder" if entry.is_dir() else format_size(stat.st_size),
+                        "is_dir": is_dir,
+                        "size": "Folder" if is_dir else format_size(stat.st_size),
                         "modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
                     })
             except OSError:
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
-            self.send_html(catalog(name, "/{}".format(name), entries), send_body)
+            theme = "audio" if name == "Audiobooks" else "books"
+            if directory is None:
+                title = name
+                breadcrumbs = [("The Library of Bex", "/library/"), (name, None)]
+            else:
+                title = directory.name
+                relative_directory = directory.relative_to(media_root)
+                breadcrumbs = [
+                    ("The Library of Bex", "/library/"),
+                    (name, "/library/{}/".format(name)),
+                ]
+                current = Path()
+                for part in relative_directory.parts:
+                    current /= part
+                    breadcrumbs.append(
+                        (part, "/library/{}{}".format(name, url_path(current)) + "/")
+                    )
+                breadcrumbs[-1] = (breadcrumbs[-1][0], None)
+            self.send_html(
+                catalog(
+                    title,
+                    "/{}".format(name),
+                    entries,
+                    theme=theme,
+                    breadcrumbs=breadcrumbs,
+                ),
+                send_body,
+            )
 
         def safe_media_path(self, request_path):
             name, encoded_relative = request_path[1:].split("/", 1)
@@ -111,7 +149,11 @@ def create_handler(roots):
             try:
                 candidate = self.safe_media_path(request_path)
                 if candidate.is_dir():
-                    self.send_error(HTTPStatus.NOT_FOUND)
+                    if not request_path.endswith("/"):
+                        self.send_error(HTTPStatus.NOT_FOUND)
+                        return
+                    name = request_path[1:].split("/", 1)[0]
+                    self.send_catalog(name, send_body, candidate)
                     return
                 if not candidate.is_file():
                     self.send_error(HTTPStatus.NOT_FOUND)

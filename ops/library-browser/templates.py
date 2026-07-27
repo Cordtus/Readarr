@@ -20,11 +20,16 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .shelf-link strong { display: block; font-size: 1.35rem; font-weight: 500; }
 .shelf-link span { display: block; margin-top: .25rem; color: #e0bd7c; font: .76rem Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
 .catalog-page { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); background: radial-gradient(circle at 20% 0, rgba(255,255,255,.55), transparent 35rem), var(--paper); }
+.audio-catalog { --catalog-accent: var(--copper); --paper: #f0ddc2; }
 .catalog { width: min(100%, 62rem); margin: 0 auto; }
 .breadcrumb { margin-bottom: 2rem; color: #765d47; font: .82rem Arial, sans-serif; }
 .breadcrumb a { text-underline-offset: .2em; }
 .catalog-header { display: flex; justify-content: space-between; gap: 1rem; align-items: end; border-bottom: 3px double var(--walnut); padding-bottom: 1rem; }
 .catalog-header h1 { margin: 0; font-size: clamp(2.2rem, 6vw, 4.4rem); font-weight: 500; line-height: .9; }
+.audio-catalog .catalog-header { border-color: var(--catalog-accent); }
+.audio-catalog .download { color: var(--catalog-accent); }
+.audio-detail, .bookmark-detail { display: inline-block; margin-left: .4em; color: var(--catalog-accent); font: .45em Arial, sans-serif; vertical-align: .35em; }
+.bookmark-detail { display: inline-block; width: .65em; height: 1em; margin-left: .15em; background: var(--catalog-accent); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%); }
 .count { margin: 0; color: #765d47; font: .78rem Arial, sans-serif; white-space: nowrap; }
 .catalog-list { margin-top: 1.2rem; border-top: 1px solid rgba(74,41,29,.35); }
 .catalog-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.5rem; align-items: center; padding: 1rem .4rem; border-bottom: 1px solid rgba(74,41,29,.25); }
@@ -48,7 +53,7 @@ def landing():
     return page("The Library of Bex", body, body_class="landing-page")
 
 
-def catalog(title, root_url, entries):
+def catalog(title, root_url, entries, *, theme="books", breadcrumbs=None):
     count = len(entries)
     noun = "item" if count == 1 else "items"
     rows = []
@@ -65,7 +70,18 @@ def catalog(title, root_url, entries):
             )
         )
     content = "".join(rows) or '<p class="empty">Awaiting new stock</p>'
-    body = '<main class="catalog-page"><article class="catalog"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / {}</nav><header class="catalog-header"><h1>{}</h1><p class="count">{} {}</p></header><section class="catalog-list" aria-label="{} catalog">{}</section></article></main>'.format(
-        escape(title), escape(title), count, noun, escape(title), content
+    audio_theme = theme == "audio"
+    body_class = "catalog-page audio-catalog" if audio_theme else "catalog-page"
+    heading_detail = '<span class="audio-detail" aria-hidden="true">♫</span><span class="bookmark-detail" aria-hidden="true"></span>' if audio_theme else ""
+    if breadcrumbs is None:
+        breadcrumbs = [("The Library of Bex", "/library/"), (title, None)]
+    breadcrumb_html = " / ".join(
+        '<a href="{}">{}</a>'.format(escape(href, quote=True), escape(label))
+        if href
+        else '<span aria-current="page">{}</span>'.format(escape(label))
+        for label, href in breadcrumbs
     )
-    return page("{} · The Library of Bex".format(title), body, body_class="catalog-page")
+    body = '<main class="{}"><article class="catalog"><nav class="breadcrumb" aria-label="Breadcrumb">{}</nav><header class="catalog-header"><h1>{}{}</h1><p class="count">{} {}</p></header><section class="catalog-list" aria-label="{} catalog">{}</section></article></main>'.format(
+        body_class, breadcrumb_html, escape(title), heading_detail, count, noun, escape(title), content
+    )
+    return page("{} · The Library of Bex".format(title), body, body_class=body_class)
