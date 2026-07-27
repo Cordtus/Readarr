@@ -83,9 +83,16 @@ def request_results(results):
     rows = []
     for token, candidate in results:
         author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
+        action = (
+            '<p class="request-message" role="status">Already in the library</p>'
+            if candidate.is_existing
+            else '<form action="/library/request/confirm/" method="get"><input type="hidden" name="token" value="{}"><button type="submit">Review request</button></form>'.format(
+                escape(token, quote=True)
+            )
+        )
         rows.append(
-            '<div class="catalog-row"><div class="catalog-name"><strong>{}</strong>{}</div><form action="/library/request/confirm/" method="get"><input type="hidden" name="token" value="{}"><button type="submit">Review request</button></form></div>'.format(
-                escape(candidate.title), author, escape(token, quote=True)
+            '<div class="catalog-row"><div class="catalog-name"><strong>{}</strong>{}</div>{}</div>'.format(
+                escape(candidate.title), author, action
             )
         )
     content = "".join(rows) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'

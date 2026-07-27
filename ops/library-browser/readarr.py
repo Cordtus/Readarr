@@ -113,6 +113,8 @@ class ReadarrClient:
     def request(self, candidate):
         if not isinstance(candidate, Candidate):
             raise ReadarrError("invalid request candidate")
+        if candidate.is_existing:
+            raise ReadarrError("request candidate already exists")
         configuration = self._require_configuration()
         if candidate.kind == "author":
             author = candidate.lookup.get("author")

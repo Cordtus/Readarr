@@ -164,6 +164,13 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     "The request desk is unavailable right now. Please try again later.",
                 )
                 return
+            if not self.has_same_origin():
+                self.send_request_error(
+                    HTTPStatus.FORBIDDEN,
+                    "Request origin not accepted",
+                    "Please submit the request from the request desk.",
+                )
+                return
             token = self.read_confirmation_token()
             if token is None:
                 return
@@ -271,7 +278,9 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             try:
                 with candidate_lock:
                     for candidate in candidates:
-                        token = candidate_store.put(candidate)
+                        token = None
+                        if not candidate.is_existing:
+                            token = candidate_store.put(candidate)
                         results.append((token, candidate))
             except RuntimeError:
                 self.send_request_error(
@@ -282,6 +291,23 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 )
                 return
             self.send_html(request_results(results), send_body)
+
+        def has_same_origin(self):
+            origin = self.headers.get("Origin")
+            host = self.headers.get("Host")
+            if not origin or not host:
+                return False
+            try:
+                parsed_origin = urllib.parse.urlsplit(origin)
+            except ValueError:
+                return False
+            return (
+                parsed_origin.scheme in ("http", "https")
+                and parsed_origin.netloc == host
+                and not parsed_origin.path
+                and not parsed_origin.query
+                and not parsed_origin.fragment
+            )
 
         def send_request_confirmation(self, send_body):
             if readarr_client is None:

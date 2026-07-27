@@ -59,8 +59,12 @@ chown sv:sv /home/sv/library-browser/readarr-request.json
 chmod 0600 /home/sv/library-browser/readarr-request.json
 ```
 
-Deploy the updated `server.py` and `run-library-browser.sh` through the normal
-rootless release process. Do not run a second watchdog while
+On first deployment, install the complete runtime bundle together in
+`/home/sv/library-browser`: `server.py`, `readarr.py`, `templates.py`,
+`assets/reading-room.webp`, and `run-library-browser.sh`. Every runtime module
+file must be updated together; keep the protected
+`readarr-request.json` configuration separate and do not overwrite it during
+bundle installation. Do not run a second watchdog while
 `watchdog.lock` exists: it exits immediately. To reload safely, stop the one
 active supervisor and let the minute cron entry restart it with a fresh lock:
 
@@ -82,7 +86,9 @@ curl -I http://127.0.0.1:8090/library/Books/
 The process listing must show the config-file path but no API key. A valid
 configuration makes `/library/request/` available; absent or invalid
 configuration returns the themed 503 page while catalogue routes remain
-available. For rollback, restore the previous `server.py` and
-`run-library-browser.sh` from the recorded deployment version, stop the active
-supervisor with the same sequence, and let cron restart it; do not alter either
-media root. Caddy, UFW, and Fail2ban remain outside this deployment scope.
+available. For rollback, restore the previous complete runtime bundle
+(`server.py`, `readarr.py`, `templates.py`, `assets/reading-room.webp`, and
+`run-library-browser.sh`) from the recorded deployment version, preserve the
+protected configuration, stop the active supervisor with the same sequence,
+and let cron restart it; do not alter either media root. Caddy, UFW, and
+Fail2ban remain outside this deployment scope.

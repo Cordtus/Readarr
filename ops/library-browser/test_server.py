@@ -302,6 +302,17 @@ class LibraryBrowserTest(unittest.TestCase):
         token = body.decode().split('name="token" value="', 1)[1].split('"', 1)[0]
         return token, body.decode()
 
+    def confirmation_headers(self, origin=None):
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        if origin is not None:
+            headers["Origin"] = origin
+        return headers
+
+    def same_origin_headers(self):
+        return self.confirmation_headers(
+            "http://127.0.0.1:{}".format(self.httpd.server_port)
+        )
+
     def test_landing_page_has_local_scene_shelves_and_request_desk_link(self):
         response, body = self.request("GET", "/")
         html = body.decode()
@@ -344,6 +355,38 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("Author &amp; Co.", html)
         self.assertNotIn("A <dangerous> title", html)
 
+    def test_existing_search_results_are_marked_without_request_tokens(self):
+        candidate_store = FakeCandidateStore()
+        self.restart_server(self.readarr_client, candidate_store)
+        self.readarr_client.candidates = [
+            readarr.Candidate(
+                kind="author",
+                foreign_id="author-1",
+                title="Existing author",
+                author_name="Existing author",
+                is_existing=True,
+                lookup={"author": {"id": 10, "authorName": "Existing author"}},
+            ),
+            readarr.Candidate(
+                kind="book",
+                foreign_id="book-2",
+                title="Existing book",
+                author_name="Existing author",
+                is_existing=True,
+                lookup={"book": {"id": 11, "foreignBookId": "book-2"}},
+            ),
+        ]
+
+        response, body = self.request("GET", "/request/search/?term=Existing")
+        html = body.decode()
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(html.count("Already in the library"), 2)
+        self.assertNotIn('action="/library/request/confirm/"', html)
+        self.assertNotIn('name="token"', html)
+        self.assertEqual(candidate_store.candidates, {})
+        self.assertEqual(self.readarr_client.requests, [])
+
     def test_confirmation_get_does_not_mutate_readarr(self):
         token, _ = self.search_for_candidate()
 
@@ -385,7 +428,7 @@ class LibraryBrowserTest(unittest.TestCase):
                 "POST",
                 "/request/confirm/",
                 urllib.parse.urlencode({"token": token}).encode(),
-                {"Content-Type": "application/x-www-form-urlencoded"},
+                self.same_origin_headers(),
             )
 
         self.assertEqual(response.status, 400)
@@ -411,7 +454,7 @@ class LibraryBrowserTest(unittest.TestCase):
                 "POST",
                 "/request/confirm/",
                 urllib.parse.urlencode({"token": token}).encode(),
-                {"Content-Type": "application/x-www-form-urlencoded"},
+                self.same_origin_headers(),
             )
 
         self.assertEqual(response.status, 400)
@@ -441,7 +484,7 @@ class LibraryBrowserTest(unittest.TestCase):
                 "POST",
                 "/request/confirm/",
                 urllib.parse.urlencode({"token": request_token}).encode(),
-                {"Content-Type": "application/x-www-form-urlencoded"},
+                self.same_origin_headers(),
             )
 
         self.assertIsNone(direct_candidate)
@@ -498,7 +541,7 @@ class LibraryBrowserTest(unittest.TestCase):
             "POST",
             "/library/request/confirm/",
             body,
-            {"Content-Type": "application/x-www-form-urlencoded"},
+            self.same_origin_headers(),
         )
 
         self.assertEqual(response.status, 200)
@@ -513,18 +556,45 @@ class LibraryBrowserTest(unittest.TestCase):
             "POST",
             "/request/confirm/",
             body,
-            {"Content-Type": "application/x-www-form-urlencoded"},
+            self.same_origin_headers(),
         )
         response, response_body = self.request(
             "POST",
             "/request/confirm/",
             body,
-            {"Content-Type": "application/x-www-form-urlencoded"},
+            self.same_origin_headers(),
         )
 
         self.assertEqual(response.status, 400)
         self.assertIn("no longer available", response_body.decode())
         self.assertEqual(self.readarr_client.requests, self.readarr_client.candidates)
+
+    def test_confirmation_post_rejects_non_matching_origins_without_consuming_tokens(self):
+        for origin in (None, "not-an-origin", "https://other.example"):
+            token, _ = self.search_for_candidate()
+            body = urllib.parse.urlencode({"token": token}).encode()
+            initial_request_count = len(self.readarr_client.requests)
+
+            response, response_body = self.request(
+                "POST",
+                "/request/confirm/",
+                body,
+                self.confirmation_headers(origin),
+            )
+
+            self.assertEqual(response.status, 403)
+            self.assertNotIn(origin or "missing", response_body.decode())
+            self.assertEqual(len(self.readarr_client.requests), initial_request_count)
+
+            response, _ = self.request(
+                "POST",
+                "/request/confirm/",
+                body,
+                self.same_origin_headers(),
+            )
+
+            self.assertEqual(response.status, 200)
+            self.assertEqual(len(self.readarr_client.requests), initial_request_count + 1)
 
     def test_request_routes_reject_bad_term_missing_configuration_and_non_form_post(self):
         response, body = self.request("GET", "/request/search/?term=x")
@@ -554,7 +624,10 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.restart_server(self.readarr_client)
         response, body = self.request(
-            "POST", "/request/confirm/", b'{"token":"not-a-form"}', {"Content-Type": "application/json"}
+            "POST",
+            "/request/confirm/",
+            b'{"token":"not-a-form"}',
+            dict(self.same_origin_headers(), **{"Content-Type": "application/json"}),
         )
 
         self.assertEqual(response.status, 415)
@@ -566,7 +639,7 @@ class LibraryBrowserTest(unittest.TestCase):
             "POST",
             "/request/confirm/",
             b"token",
-            {"Content-Type": "application/x-www-form-urlencoded"},
+            self.same_origin_headers(),
         )
 
         self.assertEqual(response.status, 400)
@@ -578,7 +651,7 @@ class LibraryBrowserTest(unittest.TestCase):
             "POST",
             "/request/confirm/",
             b"token=" + (b"a" * (8 * 1024)),
-            {"Content-Type": "application/x-www-form-urlencoded"},
+            self.same_origin_headers(),
         )
 
         self.assertEqual(response.status, 413)
