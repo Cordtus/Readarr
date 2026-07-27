@@ -3,6 +3,7 @@ import argparse
 import mimetypes
 import posixpath
 import threading
+import time
 import urllib.parse
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -25,6 +26,39 @@ ROUTES = {"/Books/": "Books", "/Audiobooks/": "Audiobooks"}
 MAX_FORM_BYTES = 8 * 1024
 
 
+class CandidatePreviewStore:
+    def __init__(self, candidate_store, ttl_seconds=300, clock=time.time):
+        self._candidate_store = candidate_store
+        self._ttl_seconds = ttl_seconds
+        self._clock = clock
+        self._previews = {}
+
+    def put(self, candidate):
+        self._purge_expired()
+        expires_at = self._clock() + self._ttl_seconds
+        token = self._candidate_store.put(candidate)
+        self._previews[token] = (expires_at, candidate)
+        return token
+
+    def peek(self, token):
+        self._purge_expired()
+        preview = self._previews.get(token)
+        return preview[1] if preview is not None else None
+
+    def take(self, token):
+        self._previews.pop(token, None)
+        return self._candidate_store.take(token)
+
+    def _purge_expired(self):
+        now = self._clock()
+        expired_tokens = [
+            token for token, (expires_at, _) in self._previews.items()
+            if now >= expires_at
+        ]
+        for token in expired_tokens:
+            self._previews.pop(token, None)
+
+
 def format_size(size):
     if size < 1024:
         return "{} B".format(size)
@@ -43,7 +77,8 @@ def url_path(path):
 def create_handler(roots, readarr_client=None, candidate_store=None):
     resolved_roots = {name: Path(root).resolve() for name, root in roots.items()}
     candidate_store = candidate_store or CandidateStore()
-    candidate_details = {}
+    if not hasattr(candidate_store, "peek"):
+        candidate_store = CandidatePreviewStore(candidate_store)
     candidate_lock = threading.Lock()
 
     class LibraryHandler(BaseHTTPRequestHandler):
@@ -72,7 +107,6 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 return
             with candidate_lock:
                 candidate = candidate_store.take(token)
-                candidate_details.pop(token, None)
             if candidate is None:
                 self.send_request_error(
                     HTTPStatus.BAD_REQUEST,
@@ -175,7 +209,6 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             with candidate_lock:
                 for candidate in candidates:
                     token = candidate_store.put(candidate)
-                    candidate_details[token] = candidate
                     results.append((token, candidate))
             self.send_html(request_results(results), send_body)
 
@@ -200,7 +233,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 )
                 return
             with candidate_lock:
-                candidate = candidate_details.get(tokens[0])
+                candidate = candidate_store.peek(tokens[0])
             if candidate is None:
                 self.send_request_error(
                     HTTPStatus.BAD_REQUEST,

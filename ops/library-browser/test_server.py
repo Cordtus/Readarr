@@ -35,6 +35,28 @@ class FakeReadarrClient:
         return {"id": 1}
 
 
+class FakeExpiringCandidateStore:
+    def __init__(self):
+        self.now = 0
+        self.candidates = {}
+
+    def put(self, candidate):
+        self.candidates["candidate-token"] = (self.now + 60, candidate)
+        return "candidate-token"
+
+    def peek(self, token):
+        entry = self.candidates.get(token)
+        if entry is None or self.now >= entry[0]:
+            self.candidates.pop(token, None)
+            return None
+        return entry[1]
+
+    def take(self, token):
+        candidate = self.peek(token)
+        self.candidates.pop(token, None)
+        return candidate
+
+
 class LibraryBrowserTest(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -50,9 +72,14 @@ class LibraryBrowserTest(unittest.TestCase):
         self.readarr_client = FakeReadarrClient()
         self.start_server(self.readarr_client)
 
-    def start_server(self, readarr_client):
+    def start_server(self, readarr_client, candidate_store=None):
         self.httpd = server.create_server(
-            "127.0.0.1", 0, self.books, self.audiobooks, readarr_client=readarr_client
+            "127.0.0.1",
+            0,
+            self.books,
+            self.audiobooks,
+            readarr_client=readarr_client,
+            candidate_store=candidate_store,
         )
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -64,11 +91,11 @@ class LibraryBrowserTest(unittest.TestCase):
         self.httpd.server_close()
         self.temp_dir.cleanup()
 
-    def restart_server(self, readarr_client):
+    def restart_server(self, readarr_client, candidate_store=None):
         self.connection.close()
         self.httpd.shutdown()
         self.httpd.server_close()
-        self.start_server(readarr_client)
+        self.start_server(readarr_client, candidate_store)
 
     def request(self, method, path, body=None, headers=None):
         self.connection.request(method, path, body=body, headers=headers or {})
@@ -136,6 +163,18 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("A &lt;dangerous&gt; title", body.decode())
         self.assertEqual(self.readarr_client.requests, [])
 
+    def test_expired_confirmation_preview_is_rejected_without_mutating_readarr(self):
+        candidate_store = FakeExpiringCandidateStore()
+        self.restart_server(self.readarr_client, candidate_store)
+        token, _ = self.search_for_candidate()
+        candidate_store.now = 60
+
+        response, body = self.request("GET", "/request/confirm/?token=" + token)
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("no longer available", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
     def test_confirmation_post_requests_candidate_once(self):
         token, _ = self.search_for_candidate()
         body = urllib.parse.urlencode({"token": token}).encode()
@@ -192,6 +231,30 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 415)
         self.assertIn("form", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
+    def test_malformed_urlencoded_confirmation_is_rejected(self):
+        response, body = self.request(
+            "POST",
+            "/request/confirm/",
+            b"token",
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("Invalid request form", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
+    def test_oversized_confirmation_form_is_rejected(self):
+        response, body = self.request(
+            "POST",
+            "/request/confirm/",
+            b"token=" + (b"a" * (8 * 1024)),
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        self.assertEqual(response.status, 413)
+        self.assertIn("Request form too large", body.decode())
         self.assertEqual(self.readarr_client.requests, [])
 
     def test_books_catalog_escapes_names_and_exposes_metadata(self):
