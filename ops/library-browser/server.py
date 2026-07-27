@@ -27,6 +27,11 @@ ROUTES = {"/Books/": "Books", "/Audiobooks/": "Audiobooks"}
 MAX_FORM_BYTES = 8 * 1024
 
 
+class SafeArgumentParser(argparse.ArgumentParser):
+    def error(self, _message):
+        self.exit(2, "error: invalid command-line arguments; use --help\n")
+
+
 class CandidatePreviewStore:
     def __init__(self, candidate_store, ttl_seconds=300, clock=time.time):
         self._candidate_store = candidate_store
@@ -513,7 +518,7 @@ def create_server(host, port, books_root, audiobooks_root, readarr_client=None, 
 
 
 def parse_args(arguments=None):
-    parser = argparse.ArgumentParser(description="Readarr Library Browser")
+    parser = SafeArgumentParser(description="Readarr Library Browser")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--books-root", required=True)

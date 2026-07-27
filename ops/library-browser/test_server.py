@@ -1,9 +1,11 @@
 import os
 import json
+import io
 import tempfile
 import threading
 import urllib.parse
 import unittest
+from contextlib import redirect_stderr
 from unittest import mock
 from http.client import HTTPConnection
 from pathlib import Path
@@ -168,6 +170,21 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
             Path("/home/sv/library-browser/readarr-request.json"),
         )
         self.assertNotIn("api_key", vars(args))
+
+    def test_parse_args_redacts_invalid_argument_values(self):
+        secret = "SENTINEL_SECRET"
+        stderr = io.StringIO()
+
+        with redirect_stderr(stderr), self.assertRaises(SystemExit) as error:
+            server.parse_args(["--api-key", secret])
+
+        self.assertEqual(error.exception.code, 2)
+        self.assertEqual(
+            stderr.getvalue(),
+            "error: invalid command-line arguments; use --help\n",
+        )
+        self.assertNotIn(secret, stderr.getvalue())
+        self.assertNotIn("--api-key", stderr.getvalue())
 
     def test_valid_json_configuration_constructs_a_readarr_client(self):
         with tempfile.TemporaryDirectory() as directory:

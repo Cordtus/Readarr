@@ -60,10 +60,18 @@ chmod 0600 /home/sv/library-browser/readarr-request.json
 ```
 
 Deploy the updated `server.py` and `run-library-browser.sh` through the normal
-rootless release process, then restart the watchdog by stopping its current
-child and running `/home/sv/library-browser/run-library-browser.sh`. Confirm
-the minute cron check leaves one listener, inspect the watchdog log for only
-the sanitized configuration status, and verify locally:
+rootless release process. Do not run a second watchdog while
+`watchdog.lock` exists: it exits immediately. To reload safely, stop the one
+active supervisor and let the minute cron entry restart it with a fresh lock:
+
+```sh
+supervisor_pid=$(pgrep -u sv -f '[r]un-library-browser\.sh' | awk 'NR == 1 { pid = $1 } NR == 2 { exit 1 } END { if (NR != 1) exit 1; print pid }') || exit 1
+kill -TERM "$supervisor_pid"
+```
+
+Wait for cron to start the replacement supervisor, then confirm it leaves one
+listener, inspect the watchdog log for only the sanitized configuration status,
+and verify locally:
 
 ```sh
 ps -eo pid,args | grep '[s]erver.py'
@@ -75,6 +83,6 @@ The process listing must show the config-file path but no API key. A valid
 configuration makes `/library/request/` available; absent or invalid
 configuration returns the themed 503 page while catalogue routes remain
 available. For rollback, restore the previous `server.py` and
-`run-library-browser.sh` from the recorded deployment version, then restart
-the watchdog; do not alter either media root. Caddy, UFW, and Fail2ban remain
-outside this deployment scope.
+`run-library-browser.sh` from the recorded deployment version, stop the active
+supervisor with the same sequence, and let cron restart it; do not alter either
+media root. Caddy, UFW, and Fail2ban remain outside this deployment scope.
