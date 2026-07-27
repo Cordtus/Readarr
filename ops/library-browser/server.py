@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import argparse
 import mimetypes
-import os
 import posixpath
 import urllib.parse
 from datetime import datetime, timezone
@@ -82,7 +81,7 @@ def create_handler(roots):
                 for entry in children:
                     stat = entry.stat()
                     relative = entry.relative_to(root)
-                    href = "/{}{}".format(name, url_path(relative))
+                    href = "/library/{}{}".format(name, url_path(relative))
                     if entry.is_dir():
                         href += "/"
                     entries.append({

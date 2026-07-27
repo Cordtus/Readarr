@@ -1,4 +1,3 @@
-import os
 import tempfile
 import threading
 import unittest
@@ -17,6 +16,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.books.mkdir()
         self.audiobooks.mkdir()
         (self.books / "The <Book>.epub").write_bytes(b"book content")
+        (self.books / "Series <A>").mkdir()
         self.httpd = server.create_server(
             "127.0.0.1", 0, self.books, self.audiobooks
         )
@@ -52,10 +52,11 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertIn("Books", html)
-        self.assertIn("1 item", html)
+        self.assertIn("2 items", html)
         self.assertIn("The &lt;Book&gt;.epub", html)
         self.assertNotIn("The <Book>.epub", html)
-        self.assertIn("/Books/The%20%3CBook%3E.epub", html)
+        self.assertIn("/library/Books/The%20%3CBook%3E.epub", html)
+        self.assertIn("/library/Books/Series%20%3CA%3E/", html)
         self.assertIn("UTC", html)
 
     def test_empty_audiobooks_catalog_uses_exact_empty_state(self):
