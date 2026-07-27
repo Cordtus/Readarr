@@ -140,6 +140,42 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(author["monitorNewItems"], "all")
         self.assertEqual(author["addOptions"], {"monitor": "all", "searchForMissingBooks": True})
 
+    def test_specific_book_request_limits_new_author_to_the_requested_book(self):
+        client = readarr.ReadarrClient(
+            "http://readarr:8787",
+            "not-a-real-key",
+            configuration=readarr.ReadarrConfiguration(
+                root_folder_path="/configured/library",
+                quality_profile_id=4,
+                metadata_profile_id=7,
+                monitor="specificBook",
+                monitor_new_items="all",
+            ),
+            opener=self.opener,
+        )
+        candidate = readarr.Candidate(
+            kind="book",
+            foreign_id="book-1",
+            title="A title",
+            author_name="An author",
+            is_existing=False,
+            lookup={
+                "book": {
+                    "foreignBookId": "book-1",
+                    "title": "A title",
+                    "author": {"foreignAuthorId": "author-1", "authorName": "An author"},
+                }
+            },
+        )
+        self.responses.append(FakeResponse(201, {}))
+
+        client.request(candidate)
+
+        self.assertEqual(
+            self.requests[-1]["json"]["author"]["addOptions"],
+            {"searchForMissingBooks": True, "booksToMonitor": ["book-1"]},
+        )
+
     def test_author_request_applies_configuration_and_missing_search(self):
         candidate = readarr.Candidate(
             kind="author",
@@ -183,6 +219,12 @@ class ReadarrClientTest(unittest.TestCase):
             self.client.search("A title")
 
         self.assertNotIn("not-a-real-key", str(raised.exception))
+
+    def test_client_rejects_non_string_empty_or_decorated_base_urls(self):
+        for base_url in (None, 1, "", "http://readarr:8787?setting=value", "http://readarr:8787#fragment"):
+            with self.subTest(base_url=base_url):
+                with self.assertRaisesRegex(readarr.ReadarrError, "base URL"):
+                    readarr.ReadarrClient(base_url, "not-a-real-key")
 
 
 if __name__ == "__main__":

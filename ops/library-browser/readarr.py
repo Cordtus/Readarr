@@ -75,8 +75,15 @@ class ReadarrClient:
         configuration: Optional[ReadarrConfiguration] = None,
         opener=urllib.request.urlopen,
     ):
+        if not isinstance(base_url, str) or not base_url:
+            raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
         parsed_url = urllib.parse.urlsplit(base_url)
-        if parsed_url.scheme not in ("http", "https") or not parsed_url.netloc:
+        if (
+            parsed_url.scheme not in ("http", "https")
+            or not parsed_url.netloc
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
             raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
         if not isinstance(api_key, str) or not api_key:
             raise ReadarrError("Readarr API key must be configured")
@@ -116,6 +123,9 @@ class ReadarrClient:
                 raise ReadarrError("invalid book author")
             if not author.get("id"):
                 payload["author"] = self._new_author(author, configuration)
+                if configuration.monitor == "specificBook":
+                    payload["author"]["addOptions"].pop("monitor")
+                    payload["author"]["addOptions"]["booksToMonitor"] = [payload["foreignBookId"]]
             payload["addOptions"] = {"searchForNewBook": True}
             payload["monitored"] = True
             return self._send("POST", "/api/v1/book", payload)
