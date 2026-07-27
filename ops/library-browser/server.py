@@ -2,16 +2,27 @@
 import argparse
 import mimetypes
 import posixpath
+import threading
 import urllib.parse
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from templates import catalog, landing
+from readarr import CandidateStore, ReadarrError
+from templates import (
+    catalog,
+    landing,
+    request_confirmation,
+    request_desk,
+    request_error,
+    request_results,
+    request_success,
+)
 
 
 ROUTES = {"/Books/": "Books", "/Audiobooks/": "Audiobooks"}
+MAX_FORM_BYTES = 8 * 1024
 
 
 def format_size(size):
@@ -29,8 +40,11 @@ def url_path(path):
     return "/" + "/".join(urllib.parse.quote(part) for part in path.parts)
 
 
-def create_handler(roots):
+def create_handler(roots, readarr_client=None, candidate_store=None):
     resolved_roots = {name: Path(root).resolve() for name, root in roots.items()}
+    candidate_store = candidate_store or CandidateStore()
+    candidate_details = {}
+    candidate_lock = threading.Lock()
 
     class LibraryHandler(BaseHTTPRequestHandler):
         server_version = "ReadarrLibrary/1.0"
@@ -41,14 +55,63 @@ def create_handler(roots):
         def do_HEAD(self):
             self.handle_request(send_body=False)
 
+        def do_POST(self):
+            request_path = self.application_path()
+            if request_path != "/request/confirm/":
+                self.send_error(HTTPStatus.NOT_FOUND)
+                return
+            if readarr_client is None:
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Request desk unavailable",
+                    "The request desk is unavailable right now. Please try again later.",
+                )
+                return
+            token = self.read_confirmation_token()
+            if token is None:
+                return
+            with candidate_lock:
+                candidate = candidate_store.take(token)
+                candidate_details.pop(token, None)
+            if candidate is None:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Request no longer available",
+                    "This request is no longer available. Search the catalogue again to make a new request.",
+                )
+                return
+            try:
+                readarr_client.request(candidate)
+            except (ReadarrError, OSError):
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Request could not be sent",
+                    "The catalogue cannot be reached right now. Please try again later.",
+                )
+                return
+            self.send_html(request_success(candidate), send_body=True)
+
         def handle_request(self, send_body):
-            request_path = urllib.parse.urlsplit(self.path).path
-            # Support both a stripped reverse-proxy prefix and a transparent
-            # /library prefix without widening the set of application routes.
-            if request_path.startswith("/library/"):
-                request_path = request_path[len("/library"):]
+            request_path = self.application_path()
             if request_path == "/" or request_path == "":
                 self.send_html(landing(), send_body)
+                return
+            if request_path == "/request/":
+                if readarr_client is None:
+                    self.send_request_error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "Request desk unavailable",
+                        "The request desk is unavailable right now. Please try again later.",
+                        send_body,
+                    )
+                else:
+                    self.send_html(request_desk(), send_body)
+                return
+            if request_path == "/request/search/":
+                self.send_request_search(send_body)
+                return
+            if request_path == "/request/confirm/":
+                self.send_request_confirmation(send_body)
                 return
             if request_path in ROUTES:
                 self.send_catalog(ROUTES[request_path], send_body)
@@ -61,9 +124,155 @@ def create_handler(roots):
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
 
-        def send_html(self, content, send_body):
+        def application_path(self):
+            request_path = urllib.parse.urlsplit(self.path).path
+            # Support both a stripped reverse-proxy prefix and a transparent
+            # /library prefix without widening the set of application routes.
+            if request_path.startswith("/library/"):
+                return request_path[len("/library"):]
+            return request_path
+
+        def send_request_search(self, send_body):
+            if readarr_client is None:
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Request desk unavailable",
+                    "The request desk is unavailable right now. Please try again later.",
+                    send_body,
+                )
+                return
+            terms = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query, keep_blank_values=True
+            ).get("term", [])
+            if len(terms) != 1:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Search needs a title",
+                    "Enter a search term between 2 and 200 characters.",
+                    send_body,
+                )
+                return
+            term = terms[0].strip()
+            if not 2 <= len(term) <= 200:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Search needs a title",
+                    "Enter a search term between 2 and 200 characters.",
+                    send_body,
+                )
+                return
+            try:
+                candidates = readarr_client.search(term)
+            except (ReadarrError, OSError):
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Catalogue unavailable",
+                    "The catalogue cannot be reached right now. Please try again later.",
+                    send_body,
+                )
+                return
+            results = []
+            with candidate_lock:
+                for candidate in candidates:
+                    token = candidate_store.put(candidate)
+                    candidate_details[token] = candidate
+                    results.append((token, candidate))
+            self.send_html(request_results(results), send_body)
+
+        def send_request_confirmation(self, send_body):
+            if readarr_client is None:
+                self.send_request_error(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    "Request desk unavailable",
+                    "The request desk is unavailable right now. Please try again later.",
+                    send_body,
+                )
+                return
+            tokens = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query, keep_blank_values=True
+            ).get("token", [])
+            if len(tokens) != 1 or not tokens[0]:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Request no longer available",
+                    "This request is no longer available. Search the catalogue again to make a new request.",
+                    send_body,
+                )
+                return
+            with candidate_lock:
+                candidate = candidate_details.get(tokens[0])
+            if candidate is None:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Request no longer available",
+                    "This request is no longer available. Search the catalogue again to make a new request.",
+                    send_body,
+                )
+                return
+            self.send_html(request_confirmation(candidate, tokens[0]), send_body)
+
+        def read_confirmation_token(self):
+            if self.headers.get_content_type() != "application/x-www-form-urlencoded":
+                self.send_request_error(
+                    HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "Request form required",
+                    "Please submit the request form from the confirmation page.",
+                )
+                return None
+            content_length = self.headers.get("Content-Length")
+            try:
+                content_length = int(content_length)
+            except (TypeError, ValueError):
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Invalid request form",
+                    "The request form could not be read. Please try again.",
+                )
+                return None
+            if content_length < 0:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Invalid request form",
+                    "The request form could not be read. Please try again.",
+                )
+                return None
+            if content_length > MAX_FORM_BYTES:
+                self.send_request_error(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    "Request form too large",
+                    "The request form is too large. Please try again.",
+                )
+                return None
+            try:
+                fields = urllib.parse.parse_qs(
+                    self.rfile.read(content_length).decode("utf-8"),
+                    keep_blank_values=True,
+                    strict_parsing=True,
+                    max_num_fields=2,
+                )
+            except (UnicodeDecodeError, ValueError):
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Invalid request form",
+                    "The request form could not be read. Please try again.",
+                )
+                return None
+            tokens = fields.get("token", [])
+            if set(fields) != {"token"} or len(tokens) != 1 or not tokens[0]:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Invalid request form",
+                    "The request form could not be read. Please try again.",
+                )
+                return None
+            return tokens[0]
+
+        def send_request_error(self, status, title, message, send_body=True):
+            self.send_html(request_error(title, message), send_body, status=status)
+
+        def send_html(self, content, send_body, status=HTTPStatus.OK):
             body = content.encode("utf-8")
-            self.send_response(HTTPStatus.OK)
+            self.send_response(status)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -191,14 +400,16 @@ def create_handler(roots):
                         self.wfile.write(chunk)
 
         def log_message(self, fmt, *args):
-            print("{} - - [{}] {}".format(self.client_address[0], self.log_date_time_string(), fmt % args), flush=True)
+            pass
 
     return LibraryHandler
 
 
-def create_server(host, port, books_root, audiobooks_root):
+def create_server(host, port, books_root, audiobooks_root, readarr_client=None, candidate_store=None):
     roots = {"Books": Path(books_root), "Audiobooks": Path(audiobooks_root)}
-    return ThreadingHTTPServer((host, port), create_handler(roots))
+    return ThreadingHTTPServer(
+        (host, port), create_handler(roots, readarr_client, candidate_store)
+    )
 
 
 def main():

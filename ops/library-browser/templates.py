@@ -75,8 +75,42 @@ def archives_notice():
 
 def request_desk(message=None):
     message_html = '<p class="request-message" role="status">{}</p>'.format(escape(message)) if message else ""
-    body = """<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <span aria-current="page">Request a book</span></nav><p class="request-kicker">The librarian's desk</p><h1>Request a book</h1><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/" method="post"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="query" type="search" required><button type="submit">Search the catalogue</button></form></article></main>""".format(message_html)
+    body = """<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <span aria-current="page">Request a book</span></nav><p class="request-kicker">The librarian's desk</p><h1>Request a book</h1><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" required><button type="submit">Search the catalogue</button></form></article></main>""".format(message_html)
     return page("Request a book · The Library of Bex", body, body_class="request-page")
+
+
+def request_results(results):
+    rows = []
+    for token, candidate in results:
+        author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
+        rows.append(
+            '<div class="catalog-row"><div class="catalog-name"><strong>{}</strong>{}</div><form action="/library/request/confirm/" method="get"><input type="hidden" name="token" value="{}"><button type="submit">Review request</button></form></div>'.format(
+                escape(candidate.title), author, escape(token, quote=True)
+            )
+        )
+    content = "".join(rows) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
+    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Search results</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Search results</h1><section class="catalog-list" aria-label="Request search results">{}</section></article></main>'.format(content)
+    return page("Search results · The Library of Bex", body, body_class="request-page")
+
+
+def request_confirmation(candidate, token):
+    author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
+    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Confirm request</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Confirm request</h1><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></article></main>'.format(
+        escape(candidate.title), author, escape(token, quote=True)
+    )
+    return page("Confirm request · The Library of Bex", body, body_class="request-page")
+
+
+def request_success(candidate):
+    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Request received</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Request received</h1><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></article></main>'.format(escape(candidate.title))
+    return page("Request received · The Library of Bex", body, body_class="request-page")
+
+
+def request_error(title, message):
+    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Request desk</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>{}</h1><p class="request-message" role="alert">{}</p><p><a class="download" href="/library/request/">Return to the request desk</a></p></article></main>'.format(
+        escape(title), escape(message)
+    )
+    return page("{} · The Library of Bex".format(title), body, body_class="request-page")
 
 
 def catalog(title, root_url, entries, *, theme="books", breadcrumbs=None):

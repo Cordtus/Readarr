@@ -1,12 +1,38 @@
 import os
 import tempfile
 import threading
+import urllib.parse
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
 
+import readarr
 import server
 import templates
+
+
+class FakeReadarrClient:
+    def __init__(self):
+        self.candidates = [
+            readarr.Candidate(
+                kind="book",
+                foreign_id="book-1",
+                title="A <dangerous> title",
+                author_name="Author & Co.",
+                is_existing=False,
+                lookup={"book": {"foreignBookId": "book-1"}},
+            )
+        ]
+        self.searches = []
+        self.requests = []
+
+    def search(self, term):
+        self.searches.append(term)
+        return self.candidates
+
+    def request(self, candidate):
+        self.requests.append(candidate)
+        return {"id": 1}
 
 
 class LibraryBrowserTest(unittest.TestCase):
@@ -21,8 +47,12 @@ class LibraryBrowserTest(unittest.TestCase):
         series = self.books / "Series <A>"
         series.mkdir()
         (series / "Nested Book.epub").write_bytes(b"nested book")
+        self.readarr_client = FakeReadarrClient()
+        self.start_server(self.readarr_client)
+
+    def start_server(self, readarr_client):
         self.httpd = server.create_server(
-            "127.0.0.1", 0, self.books, self.audiobooks
+            "127.0.0.1", 0, self.books, self.audiobooks, readarr_client=readarr_client
         )
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
         self.thread.start()
@@ -34,11 +64,25 @@ class LibraryBrowserTest(unittest.TestCase):
         self.httpd.server_close()
         self.temp_dir.cleanup()
 
-    def request(self, method, path):
-        self.connection.request(method, path)
+    def restart_server(self, readarr_client):
+        self.connection.close()
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.start_server(readarr_client)
+
+    def request(self, method, path, body=None, headers=None):
+        self.connection.request(method, path, body=body, headers=headers or {})
         response = self.connection.getresponse()
         body = response.read()
         return response, body
+
+    def search_for_candidate(self):
+        response, body = self.request(
+            "GET", "/library/request/search/?term=" + urllib.parse.quote("Dangerous title")
+        )
+        self.assertEqual(response.status, 200)
+        token = body.decode().split('name="token" value="', 1)[1].split('"', 1)[0]
+        return token, body.decode()
 
     def test_landing_page_has_local_scene_shelves_and_request_desk_link(self):
         response, body = self.request("GET", "/")
@@ -52,16 +96,103 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("The archives are not yet open to the public", html)
         self.assertIn("reading-room.webp", html)
 
-    def test_request_desk_uses_the_reading_room_system_and_a_labeled_post_form(self):
+    def test_request_desk_uses_the_reading_room_system_and_a_labeled_search_form(self):
         html = templates.request_desk("A & <B>")
 
         self.assertIn("Request a book", html)
         self.assertIn("request-page", html)
-        self.assertIn('action="/library/request/" method="post"', html)
+        self.assertIn('action="/library/request/search/" method="get"', html)
         self.assertIn('<label for="request-query">', html)
-        self.assertIn('id="request-query" name="query"', html)
+        self.assertIn('id="request-query" name="term"', html)
+        self.assertIn('type="submit">Search the catalogue</button>', html)
         self.assertIn("A &amp; &lt;B&gt;", html)
         self.assertNotIn("A & <B>", html)
+
+        confirmation_html = templates.request_confirmation(
+            FakeReadarrClient().candidates[0], "opaque-token"
+        )
+
+        self.assertIn('action="/library/request/confirm/" method="post"', confirmation_html)
+        self.assertIn('name="token" value="opaque-token"', confirmation_html)
+        self.assertIn('type="submit">Confirm request</button>', confirmation_html)
+
+    def test_search_renders_escaped_candidate_without_mutating_readarr(self):
+        token, html = self.search_for_candidate()
+
+        self.assertTrue(token)
+        self.assertEqual(self.readarr_client.searches, ["Dangerous title"])
+        self.assertEqual(self.readarr_client.requests, [])
+        self.assertIn("A &lt;dangerous&gt; title", html)
+        self.assertIn("Author &amp; Co.", html)
+        self.assertNotIn("A <dangerous> title", html)
+
+    def test_confirmation_get_does_not_mutate_readarr(self):
+        token, _ = self.search_for_candidate()
+
+        response, body = self.request("GET", "/request/confirm/?token=" + urllib.parse.quote(token))
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("Confirm request", body.decode())
+        self.assertIn("A &lt;dangerous&gt; title", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
+    def test_confirmation_post_requests_candidate_once(self):
+        token, _ = self.search_for_candidate()
+        body = urllib.parse.urlencode({"token": token}).encode()
+
+        response, response_body = self.request(
+            "POST",
+            "/library/request/confirm/",
+            body,
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("Readarr accepted your request.", response_body.decode())
+        self.assertEqual(self.readarr_client.requests, self.readarr_client.candidates)
+
+    def test_reused_confirmation_token_cannot_request_again(self):
+        token, _ = self.search_for_candidate()
+        body = urllib.parse.urlencode({"token": token}).encode()
+
+        self.request(
+            "POST",
+            "/request/confirm/",
+            body,
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response, response_body = self.request(
+            "POST",
+            "/request/confirm/",
+            body,
+            {"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("no longer available", response_body.decode())
+        self.assertEqual(self.readarr_client.requests, self.readarr_client.candidates)
+
+    def test_request_routes_reject_bad_term_missing_configuration_and_non_form_post(self):
+        response, body = self.request("GET", "/request/search/?term=x")
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("between 2 and 200 characters", body.decode())
+        self.assertEqual(self.readarr_client.searches, [])
+
+        self.restart_server(None)
+        response, body = self.request("GET", "/library/request/")
+
+        self.assertEqual(response.status, 503)
+        self.assertIn("unavailable", body.decode())
+
+        self.restart_server(self.readarr_client)
+        response, body = self.request(
+            "POST", "/request/confirm/", b'{"token":"not-a-form"}', {"Content-Type": "application/json"}
+        )
+
+        self.assertEqual(response.status, 415)
+        self.assertIn("form", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
 
     def test_books_catalog_escapes_names_and_exposes_metadata(self):
         response, body = self.request("GET", "/Books/")
