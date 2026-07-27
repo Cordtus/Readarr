@@ -41,17 +41,18 @@ instance:
   "url": "https://REPLACE_WITH_READARR_URL",
   "apiKey": "REPLACE_WITH_READARR_API_KEY",
   "rootFolderPath": "REPLACE_WITH_READARR_ROOT_FOLDER_PATH",
-  "qualityProfileId": 0,
-  "metadataProfileId": 0,
+  "qualityProfileId": "REPLACE_WITH_READARR_QUALITY_PROFILE_ID",
+  "metadataProfileId": "REPLACE_WITH_READARR_METADATA_PROFILE_ID",
   "monitor": "REPLACE_WITH_READARR_MONITOR_VALUE",
   "monitorNewItems": "REPLACE_WITH_READARR_MONITOR_NEW_ITEMS_VALUE"
 }
 ```
 
-Replace every placeholder, including both `0` IDs, before starting the
-watchdog. After authenticated access to Readarr, use the instance's root-folder,
-quality-profile, and metadata-profile listings to copy the actual path and IDs;
-do not guess them. Set the file permissions after placing it:
+Replace every placeholder before starting the watchdog. The template is valid
+JSON, but the quoted profile placeholders must be replaced with the numeric IDs
+returned by Readarr. After authenticated access to Readarr, use the instance's
+root-folder, quality-profile, and metadata-profile listings to copy the actual
+path and IDs; do not guess them. Set the file permissions after placing it:
 
 ```sh
 chown sv:sv /home/sv/library-browser/readarr-request.json
