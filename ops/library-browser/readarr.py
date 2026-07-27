@@ -1,6 +1,7 @@
 import copy
 import json
 import secrets
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -51,20 +52,27 @@ class CandidateStore:
         self._ttl_seconds = ttl_seconds
         self._clock = clock
         self._candidates = {}
+        self._lock = threading.Lock()
 
     def put(self, candidate):
-        token = secrets.token_urlsafe(24)
-        self._candidates[token] = (self._clock() + self._ttl_seconds, candidate)
-        return token
+        with self._lock:
+            token = secrets.token_urlsafe(24)
+            self._candidates[token] = (self._clock() + self._ttl_seconds, candidate)
+            return token
 
     def take(self, token):
-        entry = self._candidates.pop(token, None)
-        if entry is None:
-            return None
-        expires_at, candidate = entry
-        if self._clock() >= expires_at:
-            return None
-        return candidate
+        with self._lock:
+            entry = self._candidates.pop(token, None)
+            if entry is None:
+                return None
+            expires_at, candidate = entry
+            if self._clock() >= expires_at:
+                return None
+            return candidate
+
+    def discard(self, token):
+        with self._lock:
+            self._candidates.pop(token, None)
 
 
 class ReadarrClient:

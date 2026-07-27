@@ -38,6 +38,13 @@ class CandidateStoreTest(unittest.TestCase):
         now[0] = 160
         self.assertIsNone(store.take(expired_token))
 
+    def test_discard_removes_a_candidate_without_returning_it(self):
+        store = readarr.CandidateStore()
+        token = store.put({"kind": "book", "foreignId": "book-1"})
+
+        self.assertIsNone(store.discard(token))
+        self.assertIsNone(store.take(token))
+
 
 class ReadarrClientTest(unittest.TestCase):
     def setUp(self):

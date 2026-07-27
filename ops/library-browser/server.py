@@ -81,6 +81,7 @@ class CandidatePreviewStore:
                 self._schedule_expiry(token, expires_at, candidate, marker)
                 return
             self._previews.pop(token, None)
+            self._candidate_store.discard(token)
 
     def _purge_expired(self):
         now = self._clock()
