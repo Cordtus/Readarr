@@ -19,7 +19,23 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .shelf-link:hover { transform: translateY(-3px); filter: brightness(1.12); }
 .shelf-link strong { display: block; font-size: 1.35rem; font-weight: 500; }
 .shelf-link span { display: block; margin-top: .25rem; color: #e0bd7c; font: .76rem Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.request-link { border-color: rgba(235, 190, 105, .85); }
+.archives-notice { margin: .2rem 0 0; padding: .9rem 1.1rem; color: rgba(248, 231, 189, .72); background: rgba(36, 19, 13, .58); border-left: 2px solid rgba(194, 148, 70, .62); font: .82rem/1.45 Arial, sans-serif; }
+.archives-notice strong { display: block; color: #e4b967; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; }
+.archives-notice p { margin: .3rem 0 0; }
 .catalog-page { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); background: radial-gradient(circle at 20% 0, rgba(255,255,255,.55), transparent 35rem), var(--paper); }
+.request-page { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); background: radial-gradient(circle at 10% 0, rgba(255,255,255,.58), transparent 32rem), var(--paper); }
+.request-desk { width: min(100%, 42rem); margin: 0 auto; padding: clamp(1.4rem, 5vw, 3rem); background: rgba(255,250,235,.55); border: 1px solid rgba(74,41,29,.38); box-shadow: 0 .8rem 2.5rem rgba(50, 28, 16, .15); }
+.request-desk h1 { margin: 0; color: var(--walnut); font-size: clamp(2.2rem, 7vw, 4rem); font-weight: 500; line-height: .95; }
+.request-kicker { margin: 0 0 .45rem; color: #765d47; font: .72rem Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
+.request-intro { max-width: 35rem; margin: 1rem 0 1.7rem; color: #604938; line-height: 1.5; }
+.request-form { display: grid; gap: .65rem; }
+.request-form label { color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.request-form input { width: 100%; padding: .8rem .9rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 1rem Georgia, 'Times New Roman', serif; }
+.request-form input:focus { outline: 3px solid rgba(194,148,70,.55); outline-offset: 2px; }
+.request-form button { justify-self: start; padding: .75rem 1rem; color: #f8e7bd; background: var(--walnut); border: 1px solid var(--brass); font: .75rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.request-form button:hover { background: #603625; }
+.request-message { margin: 0 0 1.2rem; padding: .75rem .9rem; color: #5e412c; background: rgba(194,148,70,.14); border-left: 3px solid var(--copper); }
 .audio-catalog { --catalog-accent: var(--copper); --paper: #f0ddc2; }
 .catalog { width: min(100%, 62rem); margin: 0 auto; }
 .breadcrumb { margin-bottom: 2rem; color: #765d47; font: .82rem Arial, sans-serif; }
@@ -49,8 +65,18 @@ def page(title, body, *, body_class=""):
 
 
 def landing():
-    body = """<main class="landing"><div class="landing-card"><section class="plaque" aria-labelledby="library-title"><p class="plaque-kicker">A private collection</p><h1 id="library-title">The Library<br>of Bex</h1></section><nav class="shelves" aria-label="Library shelves"><a class="shelf-link" href="/library/Books/"><strong>Books</strong><span>Browse the collection</span></a><a class="shelf-link" href="/library/Audiobooks/"><strong>Audiobooks</strong><span>Listen to the collection</span></a></nav></div></main>"""
+    body = """<main class="landing"><div class="landing-card"><section class="plaque" aria-labelledby="library-title"><p class="plaque-kicker">A private collection</p><h1 id="library-title">The Library<br>of Bex</h1></section><div><nav class="shelves" aria-label="Library shelves"><a class="shelf-link" href="/library/Books/"><strong>Books</strong><span>Browse the collection</span></a><a class="shelf-link" href="/library/Audiobooks/"><strong>Audiobooks</strong><span>Listen to the collection</span></a><a class="shelf-link request-link" href="/library/request/"><strong>Request a book</strong><span>Ask the librarian</span></a></nav>{}</div></div></main>""".format(archives_notice())
     return page("The Library of Bex", body, body_class="landing-page")
+
+
+def archives_notice():
+    return '<aside class="archives-notice"><strong>The archives</strong><p>The archives are not yet open to the public</p></aside>'
+
+
+def request_desk(message=None):
+    message_html = '<p class="request-message" role="status">{}</p>'.format(escape(message)) if message else ""
+    body = """<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <span aria-current="page">Request a book</span></nav><p class="request-kicker">The librarian's desk</p><h1>Request a book</h1><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/" method="post"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="query" type="search" required><button type="submit">Search the catalogue</button></form></article></main>""".format(message_html)
+    return page("Request a book · The Library of Bex", body, body_class="request-page")
 
 
 def catalog(title, root_url, entries, *, theme="books", breadcrumbs=None):

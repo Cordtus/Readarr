@@ -6,6 +6,7 @@ from http.client import HTTPConnection
 from pathlib import Path
 
 import server
+import templates
 
 
 class LibraryBrowserTest(unittest.TestCase):
@@ -39,7 +40,7 @@ class LibraryBrowserTest(unittest.TestCase):
         body = response.read()
         return response, body
 
-    def test_landing_page_has_local_scene_and_absolute_shelf_links(self):
+    def test_landing_page_has_local_scene_shelves_and_request_desk_link(self):
         response, body = self.request("GET", "/")
         html = body.decode()
 
@@ -47,7 +48,20 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("The Library of Bex", html)
         self.assertIn("/library/Books/", html)
         self.assertIn("/library/Audiobooks/", html)
+        self.assertIn('href="/library/request/"', html)
+        self.assertIn("The archives are not yet open to the public", html)
         self.assertIn("reading-room.webp", html)
+
+    def test_request_desk_uses_the_reading_room_system_and_a_labeled_post_form(self):
+        html = templates.request_desk("A & <B>")
+
+        self.assertIn("Request a book", html)
+        self.assertIn("request-page", html)
+        self.assertIn('action="/library/request/" method="post"', html)
+        self.assertIn('<label for="request-query">', html)
+        self.assertIn('id="request-query" name="query"', html)
+        self.assertIn("A &amp; &lt;B&gt;", html)
+        self.assertNotIn("A & <B>", html)
 
     def test_books_catalog_escapes_names_and_exposes_metadata(self):
         response, body = self.request("GET", "/Books/")
