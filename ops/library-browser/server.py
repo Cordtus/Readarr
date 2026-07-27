@@ -60,8 +60,9 @@ class CandidatePreviewStore:
     def close(self):
         with self._lock:
             self._closed = True
-            for _, _, timer, _ in self._previews.values():
+            for token, (_, _, timer, _) in self._previews.items():
                 timer.cancel()
+                self._candidate_store.discard(token)
             self._previews.clear()
 
     def _schedule_expiry(self, token, expires_at, candidate, marker):

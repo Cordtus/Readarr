@@ -285,6 +285,37 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("no longer available", body.decode())
         self.assertEqual(self.readarr_client.requests, [])
 
+    def test_closing_preview_store_discards_backing_candidates_before_confirmation(self):
+        clock = [0]
+        backing_store = readarr.CandidateStore(
+            ttl_seconds=120, clock=lambda: clock[0]
+        )
+        FakeTimer.timers = []
+        with mock.patch.object(server.threading, "Timer", FakeTimer):
+            previews = server.CandidatePreviewStore(
+                backing_store, ttl_seconds=60, clock=lambda: clock[0]
+            )
+            self.restart_server(self.readarr_client, previews)
+            direct_token = previews.put({"title": "A direct candidate"})
+            request_token, _ = self.search_for_candidate()
+            self.connection.close()
+            self.httpd.shutdown()
+            self.httpd.server_close()
+            direct_candidate = backing_store.take(direct_token)
+            self.start_server(self.readarr_client, previews)
+
+            response, body = self.request(
+                "POST",
+                "/request/confirm/",
+                urllib.parse.urlencode({"token": request_token}).encode(),
+                {"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+        self.assertIsNone(direct_candidate)
+        self.assertEqual(response.status, 400)
+        self.assertIn("no longer available", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
     def test_confirmation_post_requests_candidate_once(self):
         token, _ = self.search_for_candidate()
         body = urllib.parse.urlencode({"token": token}).encode()
