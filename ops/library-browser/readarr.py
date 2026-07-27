@@ -103,6 +103,8 @@ class ReadarrClient:
             author = candidate.lookup.get("author")
             if not isinstance(author, Mapping):
                 raise ReadarrError("invalid author candidate")
+            if author.get("id"):
+                raise ReadarrError("author candidate already exists")
             return self._send("POST", "/api/v1/author", self._new_author(author, configuration))
         if candidate.kind == "book":
             book = candidate.lookup.get("book")

@@ -159,6 +159,21 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(payload["rootFolderPath"], "/configured/library")
         self.assertEqual(payload["addOptions"], {"monitor": "all", "searchForMissingBooks": True})
 
+    def test_existing_author_request_is_rejected_without_posting(self):
+        candidate = readarr.Candidate(
+            kind="author",
+            foreign_id="author-1",
+            title="An author",
+            author_name="An author",
+            is_existing=True,
+            lookup={"author": {"id": 42, "authorName": "An author"}},
+        )
+
+        with self.assertRaisesRegex(readarr.ReadarrError, "already exists"):
+            self.client.request(candidate)
+
+        self.assertEqual(self.requests, [])
+
     def test_invalid_configuration_and_http_errors_do_not_expose_api_key(self):
         with self.assertRaisesRegex(readarr.ReadarrError, "root_folder_path"):
             readarr.ReadarrConfiguration("", 4, 7, "all", "all")
