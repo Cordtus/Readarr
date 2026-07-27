@@ -259,6 +259,32 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("no longer available", body.decode())
         self.assertEqual(self.readarr_client.requests, [])
 
+    def test_eager_preview_purge_discards_backing_candidate_before_confirmation(self):
+        clock = [0]
+        backing_store = readarr.CandidateStore(
+            ttl_seconds=120, clock=lambda: clock[0]
+        )
+        FakeTimer.timers = []
+        with mock.patch.object(server.threading, "Timer", FakeTimer):
+            previews = server.CandidatePreviewStore(
+                backing_store, ttl_seconds=60, clock=lambda: clock[0]
+            )
+            self.restart_server(self.readarr_client, previews)
+            token, _ = self.search_for_candidate()
+            clock[0] = 60
+            previews.peek("another-token")
+
+            response, body = self.request(
+                "POST",
+                "/request/confirm/",
+                urllib.parse.urlencode({"token": token}).encode(),
+                {"Content-Type": "application/x-www-form-urlencoded"},
+            )
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("no longer available", body.decode())
+        self.assertEqual(self.readarr_client.requests, [])
+
     def test_confirmation_post_requests_candidate_once(self):
         token, _ = self.search_for_candidate()
         body = urllib.parse.urlencode({"token": token}).encode()

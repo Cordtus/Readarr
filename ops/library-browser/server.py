@@ -92,6 +92,7 @@ class CandidatePreviewStore:
         for token in expired_tokens:
             _, _, timer, _ = self._previews.pop(token)
             timer.cancel()
+            self._candidate_store.discard(token)
 
 
 def request_candidate_store(candidate_store=None):
