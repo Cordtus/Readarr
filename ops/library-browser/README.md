@@ -92,3 +92,27 @@ available. For rollback, restore the previous complete runtime bundle
 protected configuration, stop the active supervisor with the same sequence,
 and let cron restart it; do not alter either media root. Caddy, UFW, and
 Fail2ban remain outside this deployment scope.
+
+## Responsive bookcase verification
+
+The landing page and every request state share the same bookcase shell. With
+JavaScript enabled, one shelf is pinned open at a time; without JavaScript, all
+panels remain in document flow so catalog links and request forms still work.
+Books and Audiobooks previews use the same root-bound filtering as their
+catalog routes.
+
+Before deployment, test WebKit at 393 by 852 and 430 by 932 in portrait and
+landscape. Confirm:
+
+- shelf controls and actions have at least 44 by 44 CSS-pixel targets;
+- request inputs compute to at least 16px and remain visible when focused;
+- the page has no horizontal overflow at 100% and 200% zoom;
+- safe-area padding protects content at the viewport edges;
+- touch opens one shelf at a time, while keyboard focus and activation work;
+- reduced-motion mode makes shelf changes immediate.
+
+A late-model physical iPhone Safari pass remains the final hardware acceptance
+check when a device is available. To roll back only the bookcase redesign,
+restore the timestamped pre-deploy runtime bundle, preserve
+`readarr-request.json`, stop exactly one verified watchdog process, and let the
+existing cron supervisor restart it.

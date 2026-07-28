@@ -17,6 +17,12 @@
 - Modify `ops/library-browser/test_server.py`: protect preview safety, shared-shell request states, semantics, no-JavaScript behavior, and iPhone requirements.
 - Modify `ops/library-browser/README.md`: document the shared-shell deployment and mobile verification.
 
+Testing in this plan must assert observable server, DOM, interaction, and
+computed-browser behavior. Do not grep source files or assert CSS class names,
+literal CSS declarations, script fragments, or arbitrary markup strings.
+Remove nearby tests that do so instead of carrying those implementation locks
+forward.
+
 ### Task 1: Safe dynamic shelf previews
 
 **Files:**
@@ -27,17 +33,20 @@
 - [ ] **Step 1: Write failing preview behavior tests**
 
 Add tests which create several catalog entries with deterministic timestamps,
-request `/library/`, and assert:
+request `/library/`, parse the response with `html.parser`, and assert the
+observable preview model:
 
 ```python
-self.assertIn("2 items", html)
-self.assertIn("Nested Book.epub", html)
-self.assertNotIn("escape-target", html)
-self.assertIn('href="/library/Books/"', html)
+self.assertEqual(books_preview.count, 3)
+self.assertEqual(books_preview.entries, ["Newest.epub", "Nested Book.epub", "Oldest.epub"])
+self.assertEqual(books_preview.destination, "/library/Books/")
+self.assertNotIn("escape-target", books_preview.entries)
 ```
 
-Also assert an empty Audiobooks root renders `No recordings catalogued yet`.
-Use existing symlink/traversal fixtures rather than source-text assertions.
+Also assert an empty Audiobooks root exposes an empty preview with no entries
+and a usable `/library/Audiobooks/` destination. Use existing
+symlink/traversal fixtures. Do not assert implementation-specific classes or
+raw source text.
 
 - [ ] **Step 2: Run the focused tests and verify the expected failures**
 
@@ -101,19 +110,24 @@ git commit -m "New: add safe library shelf previews"
 - [ ] **Step 1: Write failing shared-shell request tests**
 
 Exercise request form, search results, confirmation, expired-token error, and
-success through the HTTP server. For every response assert the shared identity,
-bookcase landmark, relevant open shelf, and state-specific content:
+success through the HTTP server. Parse each response into shelf controls,
+panels, forms, links, headings, and live regions. Assert that exactly one shelf
+is expanded, every control references its panel, the request state is inside
+the expanded request panel, and the expected form remains executable without
+JavaScript:
 
 ```python
-self.assertIn("The Library of Bex", html)
-self.assertIn('class="bookcase"', html)
-self.assertIn('data-shelf="request"', html)
-self.assertIn('aria-expanded="true"', html)
-self.assertNotIn("A room to browse, listen, and ask for the next book", html)
+self.assertEqual(document.main_heading, "The Library of Bex")
+self.assertEqual(document.expanded_shelves, ["request"])
+self.assertEqual(document.forms[0].action, "/library/request/search/")
+self.assertEqual(document.forms[0].method, "get")
+self.assertEqual(document.live_region.role, "alert")
 ```
 
 Preserve the existing mutation assertions: GET confirmation never adds, POST
-adds exactly once, and a reused token cannot add again.
+adds exactly once, and a reused token cannot add again. Visible error and
+success copy may be asserted where it is the user-facing outcome, but selectors,
+class names, style rules, and source fragments are not test contracts.
 
 - [ ] **Step 2: Run the request-flow tests and verify they fail**
 
@@ -172,27 +186,29 @@ git commit -m "New: embed requests in library bookcase"
 - Modify: `ops/library-browser/test_server.py`
 - Modify: `ops/library-browser/README.md`
 
-- [ ] **Step 1: Write failing semantic and mobile contract tests**
+- [ ] **Step 1: Write failing semantic accordion tests**
 
-Render the landing and request states and assert behavior-level markup:
+Render the landing and request states, parse them with `html.parser`, and
+verify shelf trigger IDs are unique and match panel `aria-labelledby` /
+`aria-controls` relationships. Verify the request form exposes a visible label,
+search input semantics, and submit control through parsed attributes:
 
 ```python
-self.assertIn("viewport-fit=cover", html)
-self.assertIn("safe-area-inset-bottom", html)
-self.assertIn('aria-controls="shelf-books-panel"', html)
-self.assertIn('enterkeyhint="search"', html)
-self.assertIn("@media (hover: hover) and (pointer: fine)", html)
+self.assertEqual(document.viewport["viewport-fit"], "cover")
+self.assertEqual(document.control("books").controls, document.panel("books").id)
+self.assertEqual(document.panel("books").labelledby, document.control("books").id)
+self.assertEqual(document.search_input.type, "search")
+self.assertEqual(document.search_input.enterkeyhint, "search")
 ```
 
-Parse each page with `html.parser` to verify shelf trigger IDs are unique and
-match panel `aria-labelledby` / `aria-controls` relationships. Assert the
-request input's CSS class receives a minimum 16px font and shelf triggers have
-44px minimum block size through stable semantic class rules.
+Do not unit-test CSS by searching `PAGE_STYLE` or response text for property
+names. Minimum font size, target size, overflow, safe-area padding, and media
+query behavior belong to the WebKit verification in Task 4.
 
 - [ ] **Step 2: Run the mobile contract tests and verify they fail**
 
 Run the newly added test methods directly. Expected: failure because the old
-viewport metadata and shelf semantics do not meet the contract.
+viewport metadata and shelf semantics do not expose the accordion contract.
 
 - [ ] **Step 3: Implement the built-in bookcase visual system**
 
@@ -286,7 +302,9 @@ Confirm 200 responses, the bookcase shell, non-empty request candidates, no
 rejected tagline, no credential in HTML/process/logs, one listener, unchanged
 media roots, and passing Caddy upstream checks. Use Playwright WebKit at 393 by
 852 and 430 by 932, portrait and landscape, to check no overflow, visible form
-focus, accordion interaction, 44px targets, and reduced-motion operation.
+focus, accordion interaction, 44px computed targets, 16px computed form text,
+safe-area padding, and reduced-motion operation. These are browser assertions,
+not source-text checks.
 
 - [ ] **Step 5: Push the verified branch**
 

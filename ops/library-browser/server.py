@@ -138,6 +138,39 @@ def url_path(path):
     return "/" + "/".join(urllib.parse.quote(part) for part in path.parts)
 
 
+def media_entries(media_root, directory=None):
+    media_root = Path(media_root)
+    root = directory or media_root
+    children = []
+    for entry in root.iterdir():
+        if entry.name.startswith("."):
+            continue
+        try:
+            resolved = entry.resolve()
+            resolved.relative_to(root)
+            if not resolved.exists():
+                continue
+            stat = resolved.stat()
+        except (OSError, ValueError):
+            continue
+        relative = entry.relative_to(media_root)
+        href = "/library/{}{}".format(media_root.name, url_path(relative))
+        is_dir = resolved.is_dir()
+        if is_dir:
+            href += "/"
+        children.append({
+            "name": entry.name,
+            "href": href,
+            "is_dir": is_dir,
+            "size": "Folder" if is_dir else format_size(stat.st_size),
+            "modified": datetime.fromtimestamp(
+                stat.st_mtime, timezone.utc
+            ).strftime("%Y-%m-%d %H:%M UTC"),
+            "modified_timestamp": stat.st_mtime,
+        })
+    return children
+
+
 def create_handler(roots, readarr_client=None, candidate_store=None):
     resolved_roots = {name: Path(root).resolve() for name, root in roots.items()}
     candidate_store = request_candidate_store(candidate_store)
@@ -192,12 +225,15 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     "The catalogue cannot be reached right now. Please try again later.",
                 )
                 return
-            self.send_html(request_success(candidate), send_body=True)
+            self.send_html(
+                request_success(candidate, previews=self.shelf_previews()),
+                send_body=True,
+            )
 
         def handle_request(self, send_body):
             request_path = self.application_path()
             if request_path == "/" or request_path == "":
-                self.send_html(landing(), send_body)
+                self.send_html(landing(self.shelf_previews()), send_body)
                 return
             if request_path == "/request/":
                 if readarr_client is None:
@@ -208,7 +244,10 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                         send_body,
                     )
                 else:
-                    self.send_html(request_desk(), send_body)
+                    self.send_html(
+                        request_desk(previews=self.shelf_previews()),
+                        send_body,
+                    )
                 return
             if request_path == "/request/search/":
                 self.send_request_search(send_body)
@@ -290,7 +329,10 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     send_body,
                 )
                 return
-            self.send_html(request_results(results), send_body)
+            self.send_html(
+                request_results(results, previews=self.shelf_previews()),
+                send_body,
+            )
 
         def has_same_origin(self):
             origin = self.headers.get("Origin")
@@ -339,7 +381,14 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     send_body,
                 )
                 return
-            self.send_html(request_confirmation(candidate, tokens[0]), send_body)
+            self.send_html(
+                request_confirmation(
+                    candidate,
+                    tokens[0],
+                    previews=self.shelf_previews(),
+                ),
+                send_body,
+            )
 
         def read_confirmation_token(self):
             if self.headers.get_content_type() != "application/x-www-form-urlencoded":
@@ -398,7 +447,11 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             return tokens[0]
 
         def send_request_error(self, status, title, message, send_body=True):
-            self.send_html(request_error(title, message), send_body, status=status)
+            self.send_html(
+                request_error(title, message, previews=self.shelf_previews()),
+                send_body,
+                status=status,
+            )
 
         def send_html(self, content, send_body, status=HTTPStatus.OK):
             body = content.encode("utf-8")
@@ -409,41 +462,43 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             if send_body:
                 self.wfile.write(body)
 
+        def shelf_previews(self):
+            previews = []
+            for name in ("Books", "Audiobooks"):
+                media_root = resolved_roots[name]
+                try:
+                    entries = media_entries(media_root)
+                except OSError:
+                    entries = []
+                entries.sort(
+                    key=lambda entry: (
+                        -entry["modified_timestamp"],
+                        entry["name"].casefold(),
+                    )
+                )
+                previews.append({
+                    "id": name.casefold(),
+                    "label": name,
+                    "href": "/library/{}/".format(name),
+                    "count": len(entries),
+                    "entries": entries[:3],
+                })
+            return previews
+
         def send_catalog(self, name, send_body, directory=None):
             media_root = resolved_roots[name]
             root = directory or media_root
-            entries = []
             try:
-                children = []
-                for entry in root.iterdir():
-                    if entry.name.startswith("."):
-                        continue
-                    try:
-                        resolved = entry.resolve()
-                        resolved.relative_to(root)
-                        if not resolved.exists():
-                            continue
-                    except (OSError, ValueError):
-                        continue
-                    children.append((entry, resolved))
-                children.sort(key=lambda pair: (not pair[1].is_dir(), pair[0].name.casefold()))
-                for entry, resolved in children:
-                    stat = resolved.stat()
-                    relative = entry.relative_to(media_root)
-                    href = "/library/{}{}".format(name, url_path(relative))
-                    is_dir = resolved.is_dir()
-                    if is_dir:
-                        href += "/"
-                    entries.append({
-                        "name": entry.name,
-                        "href": href,
-                        "is_dir": is_dir,
-                        "size": "Folder" if is_dir else format_size(stat.st_size),
-                        "modified": datetime.fromtimestamp(stat.st_mtime, timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
-                    })
+                entries = media_entries(media_root, root)
             except OSError:
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
+            entries.sort(
+                key=lambda entry: (
+                    not entry["is_dir"],
+                    entry["name"].casefold(),
+                )
+            )
             theme = "audio" if name == "Audiobooks" else "books"
             if directory is None:
                 title = name

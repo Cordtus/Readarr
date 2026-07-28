@@ -55,31 +55,270 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .empty { margin-top: 2rem; padding: 3rem 1rem; color: #765d47; border: 1px dashed rgba(74,41,29,.5); text-align: center; font-style: italic; font-size: 1.2rem; }
 @media (max-width: 650px) { .landing-card { grid-template-columns: 1fr; gap: 3rem; } .plaque { justify-self: stretch; } .catalog-header { display: block; } .count { margin-top: .8rem; } .catalog-row { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem 1rem; } .catalog-meta { grid-column: 1; } .download { grid-column: 2; grid-row: 1 / span 2; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/* The bookcase is the navigation: one piece of furniture, not a card grid. */
+.landing {
+  min-height: 100svh;
+  min-height: 100dvh;
+  place-items: center start;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background-position: center;
+}
+.landing-card.bookcase {
+  width: min(27rem, 100%);
+  min-height: min(48rem, calc(100dvh - 2rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  overflow: clip;
+  border: 1px solid rgba(227, 181, 94, .58);
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.035), transparent 12%, transparent 88%, rgba(0,0,0,.18)),
+    repeating-linear-gradient(2deg, #3d2118 0, #3d2118 8px, #43251a 9px, #382016 13px);
+  box-shadow:
+    inset 0 0 0 7px rgba(21, 10, 7, .45),
+    inset 0 0 3rem rgba(8, 3, 2, .45),
+    0 1.5rem 4rem rgba(0,0,0,.45);
+}
+.bookcase .plaque {
+  justify-self: auto;
+  margin: 1.25rem 1.25rem .8rem;
+  padding: 1rem 1.15rem 1.1rem;
+  text-align: center;
+  box-shadow: inset 0 0 0 3px rgba(38,19,12,.5), 0 .7rem 1.4rem rgba(0,0,0,.26);
+}
+.bookcase .plaque h1 { font-size: clamp(2rem, 7vw, 3.25rem); line-height: .92; }
+.bookcase .shelves { display: block; }
+.shelf {
+  margin: 0 1.15rem .8rem;
+  border: 1px solid rgba(235,190,105,.42);
+  background: rgba(20, 9, 6, .42);
+  box-shadow: inset 0 -8px 0 rgba(13,6,4,.38), 0 .65rem 1rem rgba(0,0,0,.2);
+}
+.shelf-trigger {
+  width: 100%;
+  min-height: 4.25rem;
+  display: none;
+  padding: .85rem 1rem;
+  color: #f8e7bd;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid rgba(235,190,105,.24);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(111,64,42,.94), rgba(60,32,23,.96));
+  box-shadow: inset 0 1px rgba(255,255,255,.08), inset 0 -5px rgba(14,7,5,.25);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: filter 180ms cubic-bezier(.16,1,.3,1), transform 180ms cubic-bezier(.16,1,.3,1);
+}
+.js .shelf-trigger { display: block; }
+.shelf-trigger strong { display: block; font: 500 1.2rem/1.1 Georgia, 'Times New Roman', serif; }
+.shelf-trigger span { display: block; margin-top: .28rem; color: #e6c98e; font: .76rem/1.35 Arial, sans-serif; letter-spacing: .02em; }
+.shelf-trigger[aria-expanded="true"] { filter: brightness(1.12); }
+.shelf-trigger:active { transform: scale(.985); }
+.shelf-trigger:focus-visible,
+.open-shelf:focus-visible,
+.request-form button:focus-visible { outline: 3px solid #f8d27c; outline-offset: 3px; }
+.shelf-panel {
+  padding: 1rem;
+  color: #f7e8c7;
+  background: rgba(19,9,6,.68);
+  font: .9rem/1.45 Arial, sans-serif;
+}
+.shelf-panel ul { margin: 0 0 .85rem; padding: 0; list-style: none; }
+.shelf-panel li { padding: .25rem 0; overflow-wrap: anywhere; }
+.shelf-panel li + li { border-top: 1px solid rgba(231,198,135,.18); }
+.shelf-count { margin: 0 0 .6rem; color: #dfbc75; font-size: .75rem; }
+.shelf-empty { margin: 0 0 .8rem; color: #dec99e; font-style: italic; }
+.open-shelf {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: #f8d27c;
+  font-weight: 700;
+  text-underline-offset: .22em;
+}
+.bookcase .request-desk { width: 100%; margin: 0; padding: 0; color: #f7e8c7; background: transparent; border: 0; box-shadow: none; }
+.bookcase .request-desk h2 { margin: 0 0 .65rem; color: #f8e7bd; font: 500 1.55rem/1.05 Georgia, 'Times New Roman', serif; }
+.bookcase .request-intro { margin: 0 0 1rem; color: #dec99e; }
+.bookcase .request-form input { min-height: 48px; font-size: 16px; }
+.bookcase .request-form button { min-height: 44px; max-width: 100%; white-space: nowrap; }
+.bookcase .catalog-list { margin-top: .75rem; border: 0; }
+.bookcase .catalog-row { grid-template-columns: minmax(0,1fr); gap: .65rem; padding: .85rem 0; border-bottom-color: rgba(231,198,135,.2); }
+.bookcase .catalog-name { color: #f7e8c7; }
+.bookcase .request-message { color: #f7e8c7; background: rgba(194,148,70,.14); }
+.bookcase .empty { margin: .5rem 0; padding: 1rem; color: #dec99e; border-color: rgba(231,198,135,.4); }
+.bookcase .archives-notice { margin: auto 1.25rem 1.25rem; padding: .8rem 0 0; background: transparent; border: 0; border-top: 1px solid rgba(194,148,70,.36); text-align: center; }
+.js .shelf-panel { animation: shelf-enter 260ms cubic-bezier(.16,1,.3,1) both; }
+@keyframes shelf-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@media (hover: hover) and (pointer: fine) {
+  .shelf-trigger:hover { filter: brightness(1.14); }
+}
+@media (max-width: 759px) {
+  .landing {
+    min-height: 100svh;
+    display: flex;
+    align-items: flex-end;
+    padding: min(28svh, 12rem) 0 0;
+    background-position: 58% center;
+  }
+  .landing-card.bookcase {
+    width: 100%;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    padding-right: max(0px, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: max(0px, env(safe-area-inset-left));
+    box-shadow: inset 0 0 0 6px rgba(21,10,7,.42), 0 -1rem 3rem rgba(0,0,0,.42);
+  }
+  .bookcase .plaque { margin-top: 1rem; }
+  .shelf { margin-right: 1rem; margin-left: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .js .shelf-panel { animation: none; }
+  .shelf-trigger { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .landing-card.bookcase, .shelf-panel { background-color: #342018; }
+}
+@media (prefers-contrast: more) {
+  .shelf, .landing-card.bookcase, .shelf-trigger { border-color: #f8d27c; }
+  .shelf-trigger span, .shelf-panel, .bookcase .request-intro { color: #fff0cc; }
+}
+"""
+
+BOOKCASE_SCRIPT = """
+<script>
+(() => {
+  const root = document.documentElement;
+  const triggers = [...document.querySelectorAll('.shelf-trigger')];
+  if (!triggers.length) return;
+  root.classList.add('js');
+  let pinned = triggers.find((trigger) => trigger.getAttribute('aria-expanded') === 'true') || triggers[0];
+  const panelFor = (trigger) => document.getElementById(trigger.getAttribute('aria-controls'));
+  const showOnly = (active) => {
+    triggers.forEach((trigger) => {
+      const selected = trigger === active;
+      trigger.setAttribute('aria-expanded', String(selected));
+      panelFor(trigger).hidden = !selected;
+    });
+  };
+  showOnly(pinned);
+  triggers.forEach((trigger) => {
+    trigger.addEventListener('click', () => {
+      pinned = trigger;
+      showOnly(pinned);
+    });
+  });
+})();
+</script>
 """
 
 
 def page(title, body, *, body_class=""):
-    return "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>{}</title><style>{}</style></head><body class='{}'>{}</body></html>".format(
-        escape(title), PAGE_STYLE, body_class, body
+    return "<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'><title>{}</title><style>{}</style></head><body class='{}'>{}{}</body></html>".format(
+        escape(title), PAGE_STYLE, body_class, body, BOOKCASE_SCRIPT
     )
 
 
-def landing():
-    body = """<main class="landing"><div class="landing-card"><section class="plaque" aria-labelledby="library-title"><p class="plaque-kicker">A private collection</p><h1 id="library-title">The Library<br>of Bex</h1></section><div><nav class="shelves" aria-label="Library shelves"><a class="shelf-link" href="/library/Books/"><strong>Books</strong><span>Browse the collection</span></a><a class="shelf-link" href="/library/Audiobooks/"><strong>Audiobooks</strong><span>Listen to the collection</span></a><a class="shelf-link request-link" href="/library/request/"><strong>Request a book</strong><span>Ask the librarian</span></a></nav>{}</div></div></main>""".format(archives_notice())
-    return page("The Library of Bex", body, body_class="landing-page")
+SHELVES = (
+    ("books", "Books", "Open the shelves and see what is ready to read."),
+    ("audiobooks", "Audiobooks", "Settle in with something worth hearing."),
+    ("request", "Request a book", "Search by title, author, or ISBN without leaving the room."),
+)
+
+
+def preview_panel(preview):
+    entries = "".join(
+        "<li>{}</li>".format(escape(entry["name"]))
+        for entry in preview["entries"]
+    )
+    if entries:
+        contents = "<ul>{}</ul>".format(entries)
+    else:
+        contents = '<p class="shelf-empty">{}</p>'.format(
+            "No recordings catalogued yet."
+            if preview["id"] == "audiobooks"
+            else "No volumes catalogued yet."
+        )
+    return '<p class="shelf-count">{} {}</p>{}<a class="open-shelf" href="{}">Open shelf</a>'.format(
+        preview["count"],
+        "item" if preview["count"] == 1 else "items",
+        contents,
+        escape(preview["href"], quote=True),
+    )
+
+
+def library_shell(previews, *, active_shelf="books", request_content="", title="The Library of Bex"):
+    preview_by_id = {preview["id"]: preview for preview in previews or ()}
+    shelves = []
+    for shelf_id, label, description in SHELVES:
+        expanded = shelf_id == active_shelf
+        if shelf_id == "request":
+            panel_content = request_content or request_form()
+        else:
+            preview = preview_by_id.get(shelf_id, {
+                "id": shelf_id,
+                "href": "/library/{}/".format(label),
+                "count": 0,
+                "entries": (),
+            })
+            panel_content = preview_panel(preview)
+        shelves.append(
+            '<section class="shelf" data-shelf="{}">'
+            '<button class="shelf-trigger" type="button" id="shelf-{}-trigger" '
+            'aria-label="{}" aria-expanded="{}" aria-controls="shelf-{}-panel">'
+            '<strong>{}</strong><span>{}</span></button>'
+            '<div class="shelf-panel" id="shelf-{}-panel" '
+            'aria-labelledby="shelf-{}-trigger">{}</div></section>'.format(
+                shelf_id,
+                shelf_id,
+                escape(label, quote=True),
+                str(expanded).lower(),
+                shelf_id,
+                escape(label),
+                escape(description),
+                shelf_id,
+                shelf_id,
+                panel_content,
+            )
+        )
+    body = (
+        '<main class="landing"><div class="landing-card bookcase">'
+        '<header class="plaque"><p class="plaque-kicker">A private collection</p>'
+        '<h1 id="library-title">The Library<br>of Bex</h1></header>'
+        '<div class="shelves" aria-label="Library shelves">{}</div>{}</div></main>'
+    ).format("".join(shelves), archives_notice())
+    return page(title, body, body_class="landing-page")
+
+
+def landing(previews=None):
+    return library_shell(previews or (), active_shelf="books")
 
 
 def archives_notice():
     return '<aside class="archives-notice"><strong>The archives</strong><p>The archives are not yet open to the public</p></aside>'
 
 
-def request_desk(message=None):
+def request_form(message=None):
     message_html = '<p class="request-message" role="status">{}</p>'.format(escape(message)) if message else ""
-    body = """<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <span aria-current="page">Request a book</span></nav><p class="request-kicker">The librarian's desk</p><h1>Request a book</h1><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" required><button type="submit">Search the catalogue</button></form></article></main>""".format(message_html)
-    return page("Request a book · The Library of Bex", body, body_class="request-page")
+    return """<div class="request-desk"><h2>Request a book</h2><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" enterkeyhint="search" autocomplete="off" required><button type="submit">Search the catalogue</button></form></div>""".format(message_html)
 
 
-def request_results(results):
+def request_desk(message=None, previews=None):
+    return library_shell(
+        previews or (),
+        active_shelf="request",
+        request_content=request_form(message),
+        title="Request a book - The Library of Bex",
+    )
+
+
+def request_results(results, previews=None):
     rows = []
     for token, candidate in results:
         author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
@@ -96,28 +335,28 @@ def request_results(results):
             )
         )
     content = "".join(rows) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
-    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Search results</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Search results</h1><section class="catalog-list" aria-label="Request search results">{}</section></article></main>'.format(content)
-    return page("Search results · The Library of Bex", body, body_class="request-page")
+    request_content = '<div class="request-desk"><h2>Search results</h2><section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(content)
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Search results - The Library of Bex")
 
 
-def request_confirmation(candidate, token):
+def request_confirmation(candidate, token, previews=None):
     author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
-    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Confirm request</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Confirm request</h1><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></article></main>'.format(
+    request_content = '<div class="request-desk"><h2>Confirm request</h2><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></div>'.format(
         escape(candidate.title), author, escape(token, quote=True)
     )
-    return page("Confirm request · The Library of Bex", body, body_class="request-page")
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Confirm request - The Library of Bex")
 
 
-def request_success(candidate):
-    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Request received</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>Request received</h1><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></article></main>'.format(escape(candidate.title))
-    return page("Request received · The Library of Bex", body, body_class="request-page")
+def request_success(candidate, previews=None):
+    request_content = '<div class="request-desk"><h2>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></div>'.format(escape(candidate.title))
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Request received - The Library of Bex")
 
 
-def request_error(title, message):
-    body = '<main class="request-page"><article class="request-desk"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/library/">The Library of Bex</a> / <a href="/library/request/">Request a book</a> / <span aria-current="page">Request desk</span></nav><p class="request-kicker">The librarian\'s desk</p><h1>{}</h1><p class="request-message" role="alert">{}</p><p><a class="download" href="/library/request/">Return to the request desk</a></p></article></main>'.format(
+def request_error(title, message, previews=None):
+    request_content = '<div class="request-desk"><h2>{}</h2><p class="request-message" role="alert">{}</p><p><a class="open-shelf" href="/library/request/">Return to the request desk</a></p></div>'.format(
         escape(title), escape(message)
     )
-    return page("{} · The Library of Bex".format(title), body, body_class="request-page")
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="{} - The Library of Bex".format(title))
 
 
 def catalog(title, root_url, entries, *, theme="books", breadcrumbs=None):

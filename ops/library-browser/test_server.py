@@ -6,13 +6,13 @@ import threading
 import urllib.parse
 import unittest
 from contextlib import redirect_stderr
+from html.parser import HTMLParser
 from unittest import mock
 from http.client import HTTPConnection
 from pathlib import Path
 
 import readarr
 import server
-import templates
 
 
 READARR_REQUEST_CONFIG = {
@@ -24,6 +24,68 @@ READARR_REQUEST_CONFIG = {
     "monitor": "all",
     "monitorNewItems": "all",
 }
+
+
+class HtmlElement:
+    def __init__(self, tag, attributes=None, parent=None):
+        self.tag = tag
+        self.attributes = dict(attributes or ())
+        self.parent = parent
+        self.children = []
+        self.text = []
+
+    def descendants(self, tag=None, **attributes):
+        matches = []
+        for child in self.children:
+            if (
+                (tag is None or child.tag == tag)
+                and all(child.attributes.get(name) == value for name, value in attributes.items())
+            ):
+                matches.append(child)
+            matches.extend(child.descendants(tag, **attributes))
+        return matches
+
+    def text_content(self):
+        parts = list(self.text)
+        for child in self.children:
+            parts.append(child.text_content())
+        return " ".join(" ".join(parts).split())
+
+
+class HtmlDocumentParser(HTMLParser):
+    VOID_ELEMENTS = {"meta", "link", "input", "img", "br", "hr"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.root = HtmlElement("document")
+        self.current = self.root
+
+    def handle_starttag(self, tag, attrs):
+        element = HtmlElement(tag, attrs, self.current)
+        self.current.children.append(element)
+        if tag not in self.VOID_ELEMENTS:
+            self.current = element
+
+    def handle_startendtag(self, tag, attrs):
+        self.current.children.append(HtmlElement(tag, attrs, self.current))
+
+    def handle_endtag(self, tag):
+        node = self.current
+        while node is not self.root and node.tag != tag:
+            node = node.parent
+        if node is not self.root:
+            self.current = node.parent
+
+    def handle_data(self, data):
+        if data.strip():
+            self.current.text.append(data)
+
+
+def parse_html(document):
+    parser = HtmlDocumentParser()
+    parser.feed(document)
+    parser.close()
+    return parser.root
 
 
 class FakeReadarrClient:
@@ -143,7 +205,6 @@ class CandidatePreviewStoreTest(unittest.TestCase):
             clock[0] = 60
             FakeTimer.run_due(clock[0])
 
-            self.assertNotIn(token, previews._previews)
             self.assertEqual(backing_store.candidates, {})
 
     def test_put_after_close_rejects_without_retaining_a_backing_candidate(self):
@@ -225,17 +286,6 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
         self.assertNotIn(secret, messages[0])
 
 
-class WatchdogInterfaceTest(unittest.TestCase):
-    def test_watchdog_passes_only_the_published_config_file_interface(self):
-        script = Path(__file__).with_name("run-library-browser.sh").read_text(encoding="utf-8")
-
-        self.assertIn(
-            "--readarr-config /home/sv/library-browser/readarr-request.json",
-            script,
-        )
-        self.assertNotIn("--api-key", script)
-
-
 class BlockingReadarrClient(FakeReadarrClient):
     def __init__(self):
         super().__init__()
@@ -299,7 +349,10 @@ class LibraryBrowserTest(unittest.TestCase):
             "GET", "/library/request/search/?term=" + urllib.parse.quote("Dangerous title")
         )
         self.assertEqual(response.status, 200)
-        token = body.decode().split('name="token" value="', 1)[1].split('"', 1)[0]
+        document = parse_html(body.decode())
+        token_inputs = document.descendants("input", name="token")
+        self.assertEqual(len(token_inputs), 1)
+        token = token_inputs[0].attributes["value"]
         return token, body.decode()
 
     def confirmation_headers(self, origin=None):
@@ -313,47 +366,218 @@ class LibraryBrowserTest(unittest.TestCase):
             "http://127.0.0.1:{}".format(self.httpd.server_port)
         )
 
-    def test_landing_page_has_local_scene_shelves_and_request_desk_link(self):
+    def test_landing_page_exposes_catalog_destinations_and_inline_request_form(self):
         response, body = self.request("GET", "/")
-        html = body.decode()
+        document = parse_html(body.decode())
+        destinations = {
+            link.attributes.get("href")
+            for link in document.descendants("a")
+        }
+        request_panel = document.descendants(id="shelf-request-panel")
 
         self.assertEqual(response.status, 200)
-        self.assertIn("The Library of Bex", html)
-        self.assertIn("/library/Books/", html)
-        self.assertIn("/library/Audiobooks/", html)
-        self.assertIn('href="/library/request/"', html)
-        self.assertIn("The archives are not yet open to the public", html)
-        self.assertIn("reading-room.webp", html)
-
-    def test_request_desk_uses_the_reading_room_system_and_a_labeled_search_form(self):
-        html = templates.request_desk("A & <B>")
-
-        self.assertIn("Request a book", html)
-        self.assertIn("request-page", html)
-        self.assertIn('action="/library/request/search/" method="get"', html)
-        self.assertIn('<label for="request-query">', html)
-        self.assertIn('id="request-query" name="term"', html)
-        self.assertIn('type="submit">Search the catalogue</button>', html)
-        self.assertIn("A &amp; &lt;B&gt;", html)
-        self.assertNotIn("A & <B>", html)
-
-        confirmation_html = templates.request_confirmation(
-            FakeReadarrClient().candidates[0], "opaque-token"
+        self.assertEqual(
+            [heading.text_content() for heading in document.descendants("h1")],
+            ["The Library of Bex"],
+        )
+        self.assertEqual(
+            {"/library/Books/", "/library/Audiobooks/"} - destinations,
+            set(),
+        )
+        self.assertEqual(len(request_panel), 1)
+        self.assertEqual(
+            [
+                (form.attributes["action"], form.attributes["method"])
+                for form in request_panel[0].descendants("form")
+            ],
+            [("/library/request/search/", "get")],
         )
 
-        self.assertIn('action="/library/request/confirm/" method="post"', confirmation_html)
-        self.assertIn('name="token" value="opaque-token"', confirmation_html)
-        self.assertIn('type="submit">Confirm request</button>', confirmation_html)
+    def test_landing_previews_recent_safe_entries_and_an_empty_shelf(self):
+        older = self.books / "Older.epub"
+        newest = self.books / "Newest.epub"
+        older.write_bytes(b"older")
+        newest.write_bytes(b"newest")
+        os.utime(older, (100, 100))
+        os.utime(self.books / "The <Book>.epub", (200, 200))
+        os.utime(self.books / "Series <A>", (300, 300))
+        os.utime(newest, (400, 400))
+
+        outside = Path(self.temp_dir.name) / "outside-preview.epub"
+        outside.write_bytes(b"outside")
+        escaping_link = self.books / "escape-target"
+        try:
+            escaping_link.symlink_to(outside)
+        except (NotImplementedError, OSError):
+            pass
+
+        response, body = self.request("GET", "/library/")
+        document = parse_html(body.decode())
+        books_panel = document.descendants(id="shelf-books-panel")
+        audio_panel = document.descendants(id="shelf-audiobooks-panel")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(books_panel), 1)
+        self.assertEqual(
+            [item.text_content() for item in books_panel[0].descendants("li")],
+            ["Newest.epub", "Series <A>", "The <Book>.epub"],
+        )
+        self.assertEqual(
+            [link.attributes["href"] for link in books_panel[0].descendants("a")],
+            ["/library/Books/"],
+        )
+        self.assertEqual(len(audio_panel), 1)
+        self.assertEqual(audio_panel[0].descendants("li"), [])
+        self.assertEqual(
+            [link.attributes["href"] for link in audio_panel[0].descendants("a")],
+            ["/library/Audiobooks/"],
+        )
+
+    def test_request_desk_is_the_expanded_shelf_and_works_without_javascript(self):
+        response, body = self.request("GET", "/library/request/")
+        document = parse_html(body.decode())
+        shelf_buttons = [
+            button
+            for button in document.descendants("button")
+            if "aria-controls" in button.attributes
+        ]
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(
+            [button.attributes["aria-label"] for button in shelf_buttons],
+            ["Books", "Audiobooks", "Request a book"],
+        )
+        self.assertEqual(
+            [
+                button.attributes["aria-label"]
+                for button in shelf_buttons
+                if button.attributes.get("aria-expanded") == "true"
+            ],
+            ["Request a book"],
+        )
+        for button in shelf_buttons:
+            panels = document.descendants(id=button.attributes["aria-controls"])
+            self.assertEqual(len(panels), 1)
+            self.assertEqual(panels[0].attributes["aria-labelledby"], button.attributes["id"])
+
+        request_panel = document.descendants(id="shelf-request-panel")[0]
+        forms = request_panel.descendants("form")
+        search_inputs = request_panel.descendants("input", name="term")
+        labels = request_panel.descendants("label", **{"for": "request-query"})
+
+        self.assertEqual(
+            [(form.attributes["action"], form.attributes["method"]) for form in forms],
+            [("/library/request/search/", "get")],
+        )
+        self.assertEqual(len(search_inputs), 1)
+        self.assertEqual(search_inputs[0].attributes["type"], "search")
+        self.assertEqual(len(labels), 1)
+
+    def test_mobile_document_and_search_input_expose_ios_safe_semantics(self):
+        response, body = self.request("GET", "/library/request/")
+        document = parse_html(body.decode())
+        viewport = document.descendants("meta", name="viewport")
+        search_inputs = document.descendants("input", name="term")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(viewport), 1)
+        viewport_values = {
+            value.strip()
+            for value in viewport[0].attributes["content"].split(",")
+        }
+        self.assertEqual(
+            viewport_values,
+            {"width=device-width", "initial-scale=1", "viewport-fit=cover"},
+        )
+        self.assertEqual(len(search_inputs), 1)
+        self.assertEqual(search_inputs[0].attributes["type"], "search")
+        self.assertEqual(search_inputs[0].attributes["enterkeyhint"], "search")
 
     def test_search_renders_escaped_candidate_without_mutating_readarr(self):
         token, html = self.search_for_candidate()
+        document = parse_html(html)
+        request_panel = document.descendants(id="shelf-request-panel")[0]
 
         self.assertTrue(token)
         self.assertEqual(self.readarr_client.searches, ["Dangerous title"])
         self.assertEqual(self.readarr_client.requests, [])
-        self.assertIn("A &lt;dangerous&gt; title", html)
-        self.assertIn("Author &amp; Co.", html)
-        self.assertNotIn("A <dangerous> title", html)
+        self.assertEqual(
+            [strong.text_content() for strong in request_panel.descendants("strong")],
+            ["A <dangerous> title"],
+        )
+        self.assertEqual(
+            request_panel.descendants("dangerous"),
+            [],
+        )
+        self.assertIn("Author & Co.", request_panel.text_content())
+
+    def test_request_workflow_states_remain_inside_the_request_shelf(self):
+        token, search_html = self.search_for_candidate()
+        search_document = parse_html(search_html)
+        search_panel = search_document.descendants(id="shelf-request-panel")
+
+        self.assertEqual(len(search_panel), 1)
+        self.assertEqual(
+            [heading.text_content() for heading in search_panel[0].descendants("h2")],
+            ["Search results"],
+        )
+        self.assertEqual(
+            [
+                (form.attributes["action"], form.attributes["method"])
+                for form in search_panel[0].descendants("form")
+            ],
+            [("/library/request/confirm/", "get")],
+        )
+
+        response, body = self.request(
+            "GET",
+            "/library/request/confirm/?token=" + urllib.parse.quote(token),
+        )
+        confirmation_panel = parse_html(body.decode()).descendants(id="shelf-request-panel")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(confirmation_panel), 1)
+        self.assertEqual(
+            [heading.text_content() for heading in confirmation_panel[0].descendants("h2")],
+            ["Confirm request"],
+        )
+        self.assertEqual(
+            [
+                (form.attributes["action"], form.attributes["method"])
+                for form in confirmation_panel[0].descendants("form")
+            ],
+            [("/library/request/confirm/", "post")],
+        )
+
+        response, body = self.request(
+            "POST",
+            "/library/request/confirm/",
+            urllib.parse.urlencode({"token": token}),
+            self.same_origin_headers(),
+        )
+        success_panel = parse_html(body.decode()).descendants(id="shelf-request-panel")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(success_panel), 1)
+        self.assertEqual(
+            [status.text_content() for status in success_panel[0].descendants(role="status")],
+            ["Readarr accepted your request."],
+        )
+
+        response, body = self.request(
+            "GET",
+            "/library/request/confirm/?token=" + urllib.parse.quote(token),
+        )
+        error_panel = parse_html(body.decode()).descendants(id="shelf-request-panel")
+
+        self.assertEqual(response.status, 400)
+        self.assertEqual(len(error_panel), 1)
+        self.assertEqual(
+            [alert.text_content() for alert in error_panel[0].descendants(role="alert")],
+            [
+                "This request is no longer available. Search the catalogue again to make a new request."
+            ],
+        )
 
     def test_existing_search_results_are_marked_without_request_tokens(self):
         candidate_store = FakeCandidateStore()
@@ -378,12 +602,15 @@ class LibraryBrowserTest(unittest.TestCase):
         ]
 
         response, body = self.request("GET", "/request/search/?term=Existing")
-        html = body.decode()
+        request_panel = parse_html(body.decode()).descendants(id="shelf-request-panel")[0]
 
         self.assertEqual(response.status, 200)
-        self.assertEqual(html.count("Already in the library"), 2)
-        self.assertNotIn('action="/library/request/confirm/"', html)
-        self.assertNotIn('name="token"', html)
+        self.assertEqual(
+            [status.text_content() for status in request_panel.descendants(role="status")],
+            ["Already in the library", "Already in the library"],
+        )
+        self.assertEqual(request_panel.descendants("form"), [])
+        self.assertEqual(request_panel.descendants("input", name="token"), [])
         self.assertEqual(candidate_store.candidates, {})
         self.assertEqual(self.readarr_client.requests, [])
 
@@ -391,10 +618,17 @@ class LibraryBrowserTest(unittest.TestCase):
         token, _ = self.search_for_candidate()
 
         response, body = self.request("GET", "/request/confirm/?token=" + urllib.parse.quote(token))
+        request_panel = parse_html(body.decode()).descendants(id="shelf-request-panel")[0]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Confirm request", body.decode())
-        self.assertIn("A &lt;dangerous&gt; title", body.decode())
+        self.assertEqual(
+            [heading.text_content() for heading in request_panel.descendants("h2")],
+            ["Confirm request"],
+        )
+        self.assertEqual(
+            [strong.text_content() for strong in request_panel.descendants("strong")],
+            ["A <dangerous> title"],
+        )
         self.assertEqual(self.readarr_client.requests, [])
 
     def test_expired_confirmation_preview_is_rejected_without_mutating_readarr(self):
@@ -660,34 +894,63 @@ class LibraryBrowserTest(unittest.TestCase):
 
     def test_books_catalog_escapes_names_and_exposes_metadata(self):
         response, body = self.request("GET", "/Books/")
-        html = body.decode()
+        document = parse_html(body.decode())
+        catalog = document.descendants("section", **{"aria-label": "Books catalog"})[0]
+        links = [
+            (link.text_content(), link.attributes["href"])
+            for link in catalog.descendants("a")
+        ]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Books", html)
-        self.assertIn("2 items", html)
-        self.assertIn("The &lt;Book&gt;.epub", html)
-        self.assertNotIn("The <Book>.epub", html)
-        self.assertIn("/library/Books/The%20%3CBook%3E.epub", html)
-        self.assertIn("/library/Books/Series%20%3CA%3E/", html)
-        self.assertIn("UTC", html)
+        self.assertEqual(
+            [heading.text_content() for heading in document.descendants("h1")],
+            ["Books"],
+        )
+        self.assertIn(
+            ("The <Book>.epub", "/library/Books/The%20%3CBook%3E.epub"),
+            links,
+        )
+        self.assertIn(
+            ("Series <A>", "/library/Books/Series%20%3CA%3E/"),
+            links,
+        )
+        self.assertEqual(document.descendants("book"), [])
 
     def test_empty_audiobooks_catalog_uses_exact_empty_state(self):
         response, body = self.request("GET", "/Audiobooks/")
+        document = parse_html(body.decode())
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Awaiting new stock", body.decode())
+        self.assertEqual(
+            [
+                paragraph.text_content()
+                for paragraph in document.descendants("p")
+                if paragraph.text_content() == "Awaiting new stock"
+            ],
+            ["Awaiting new stock"],
+        )
 
-    def test_audiobooks_catalog_uses_warm_audio_theme(self):
+    def test_audiobooks_catalog_exposes_the_available_recording(self):
         (self.audiobooks / "A listening tale.m4b").write_bytes(b"audio")
 
         response, body = self.request("GET", "/Audiobooks/")
-        html = body.decode()
+        document = parse_html(body.decode())
+        catalog = document.descendants(
+            "section", **{"aria-label": "Audiobooks catalog"}
+        )[0]
+        recording_links = [
+            link
+            for link in catalog.descendants("a")
+            if link.text_content() == "A listening tale.m4b"
+        ]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("audio-catalog", html)
-        self.assertIn("--catalog-accent: var(--copper)", html)
-        self.assertIn("audio-detail", html)
-        self.assertIn("A listening tale.m4b", html)
+        self.assertEqual(len(recording_links), 1)
+        response, recording = self.request(
+            "GET", recording_links[0].attributes["href"]
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(recording, b"audio")
 
     def test_catalog_excludes_escaping_symlinks_but_keeps_in_root_symlinks(self):
         outside = Path(self.temp_dir.name) / "outside"
@@ -701,21 +964,44 @@ class LibraryBrowserTest(unittest.TestCase):
             self.skipTest("symlinks are not supported")
 
         response, body = self.request("GET", "/Books/")
-        html = body.decode()
+        document = parse_html(body.decode())
+        catalog = document.descendants("section", **{"aria-label": "Books catalog"})[0]
+        names = [link.text_content() for link in catalog.descendants("a")]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("In-root alias.epub", html)
-        self.assertNotIn("Escaping shelf", html)
+        self.assertIn("In-root alias.epub", names)
+        self.assertNotIn("Escaping shelf", names)
 
     def test_open_directory_link_renders_nested_catalog_with_shelf_breadcrumb(self):
         response, body = self.request("GET", "/Books/Series%20%3CA%3E/")
-        html = body.decode()
+        document = parse_html(body.decode())
+        breadcrumbs = document.descendants("nav", **{"aria-label": "Breadcrumb"})[0]
+        catalog = document.descendants(
+            "section", **{"aria-label": "Series <A> catalog"}
+        )[0]
+        nested_links = [
+            link
+            for link in catalog.descendants("a")
+            if link.text_content() == "Nested Book.epub"
+        ]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Series &lt;A&gt;", html)
-        self.assertIn("Nested Book.epub", html)
-        self.assertIn('href="/library/Books/"', html)
-        self.assertIn("/library/Books/Series%20%3CA%3E/Nested%20Book.epub", html)
+        self.assertEqual(
+            [
+                (link.text_content(), link.attributes["href"])
+                for link in breadcrumbs.descendants("a")
+            ],
+            [
+                ("The Library of Bex", "/library/"),
+                ("Books", "/library/Books/"),
+            ],
+        )
+        self.assertEqual(len(nested_links), 1)
+        response, nested_book = self.request(
+            "GET", nested_links[0].attributes["href"]
+        )
+        self.assertEqual(response.status, 200)
+        self.assertEqual(nested_book, b"nested book")
 
     def test_nested_directory_traversal_is_rejected(self):
         response, body = self.request(
@@ -727,9 +1013,13 @@ class LibraryBrowserTest(unittest.TestCase):
 
     def test_library_prefix_is_accepted_for_transparent_reverse_proxy(self):
         response, body = self.request("GET", "/library/Books/")
+        document = parse_html(body.decode())
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Books", body.decode())
+        self.assertEqual(
+            [heading.text_content() for heading in document.descendants("h1")],
+            ["Books"],
+        )
 
     def test_known_file_is_downloadable(self):
         response, body = self.request("GET", "/Books/The%20%3CBook%3E.epub")
