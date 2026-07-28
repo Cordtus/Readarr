@@ -139,6 +139,16 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .bookcase .catalog-name { color: #f7e8c7; }
 .bookcase .request-message { color: #f7e8c7; background: rgba(194,148,70,.14); }
 .bookcase .empty { margin: .5rem 0; padding: 1rem; color: #dec99e; border-color: rgba(231,198,135,.4); }
+.result-group + .result-group { margin-top: 1.25rem; }
+.result-heading { margin: 0 0 .55rem; color: #dfbc75; font: 700 .72rem/1.2 Arial, sans-serif; letter-spacing: .13em; text-transform: uppercase; }
+.request-result { padding: .85rem 0; border-top: 1px solid rgba(231,198,135,.22); }
+.request-result:first-of-type { border-top: 0; }
+.result-kind { display: inline-block; margin-bottom: .35rem; color: #dfbc75; font: 700 .65rem/1.2 Arial, sans-serif; letter-spacing: .12em; text-transform: uppercase; }
+.result-title { margin: 0; color: #f8e7bd; font: 500 1.08rem/1.25 Georgia, 'Times New Roman', serif; }
+.result-byline, .result-explanation { margin: .3rem 0 0; color: #dec99e; }
+.result-actions { margin: .65rem 0 0; }
+.refine-search { margin-bottom: 1.2rem; padding-bottom: 1.2rem; border-bottom: 1px solid rgba(231,198,135,.24); }
+.request-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: 1rem; }
 .bookcase .archives-notice { margin: auto 1.25rem 1.25rem; padding: .8rem 0 0; background: transparent; border: 0; border-top: 1px solid rgba(194,148,70,.36); text-align: center; }
 .js .shelf-panel { animation: shelf-enter 260ms cubic-bezier(.16,1,.3,1) both; }
 @keyframes shelf-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
@@ -150,23 +160,40 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   .landing {
     min-height: 100svh;
     display: flex;
-    align-items: flex-end;
-    padding: min(28svh, 12rem) 0 0;
-    background-position: 58% center;
+    align-items: flex-start;
+    padding: max(clamp(5rem, 16svh, 8rem), env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
+    background-position: center;
   }
   .landing-card.bookcase {
-    width: 100%;
+    width: min(100%, 35rem);
     min-height: 0;
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    padding-right: max(0px, env(safe-area-inset-right));
-    padding-bottom: max(1rem, env(safe-area-inset-bottom));
-    padding-left: max(0px, env(safe-area-inset-left));
-    box-shadow: inset 0 0 0 6px rgba(21,10,7,.42), 0 -1rem 3rem rgba(0,0,0,.42);
+    margin: 0 auto;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,.05), transparent 14%, transparent 86%, rgba(0,0,0,.14)),
+      repeating-linear-gradient(2deg, rgba(61,33,24,.94) 0, rgba(61,33,24,.94) 8px, rgba(67,37,26,.94) 9px, rgba(56,32,22,.94) 13px);
+    box-shadow: inset 0 0 0 6px rgba(21,10,7,.42), 0 1rem 3rem rgba(0,0,0,.42);
   }
   .bookcase .plaque { margin-top: 1rem; }
   .shelf { margin-right: 1rem; margin-left: 1rem; }
+  .bookcase .request-desk {
+    padding: 1rem;
+    color: var(--ink);
+    background: rgba(247,235,204,.96);
+    border: 1px solid rgba(194,148,70,.5);
+    box-shadow: inset 0 0 2rem rgba(115,72,38,.08);
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+  .bookcase .request-desk h2,
+  .bookcase .result-title { color: var(--walnut); }
+  .bookcase .request-intro,
+  .bookcase .result-byline,
+  .bookcase .result-explanation { color: #604938; }
+  .bookcase .result-heading,
+  .bookcase .result-kind { color: #8a5a2b; }
+  .bookcase .request-message { color: #5e412c; background: rgba(194,148,70,.14); }
+  .bookcase .request-desk .open-shelf { color: var(--walnut); }
+  .request-result { border-top-color: rgba(74,41,29,.22); }
+  .refine-search { border-bottom-color: rgba(74,41,29,.24); }
 }
 @media (max-width: 319px) {
   .bookcase .plaque,
@@ -190,6 +217,14 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 @media (prefers-contrast: more) {
   .shelf, .landing-card.bookcase, .shelf-trigger { border-color: #f8d27c; }
   .shelf-trigger span, .shelf-panel, .bookcase .request-intro { color: #fff0cc; }
+}
+@media (max-width: 759px) and (prefers-contrast: more) {
+  .bookcase .request-desk {
+    color: var(--ink);
+    background: #fffaf0;
+    border-color: var(--walnut);
+  }
+  .bookcase .request-intro { color: var(--ink); }
 }
 """
 
@@ -324,37 +359,90 @@ def request_desk(message=None, previews=None):
     )
 
 
-def request_results(results, previews=None):
-    rows = []
-    for token, candidate in results:
-        author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
-        action = (
-            '<p class="request-message" role="status">Already in the library</p>'
-            if candidate.is_existing
-            else '<form action="/library/request/confirm/" method="get"><input type="hidden" name="token" value="{}"><button type="submit">Review request</button></form>'.format(
-                escape(token, quote=True)
+def request_results(results, term="", previews=None):
+    groups = []
+    for kind, heading in (("book", "Books"), ("author", "Authors")):
+        rows = []
+        for token, candidate in results:
+            if candidate.kind != kind:
+                continue
+            if candidate.is_existing:
+                action = '<p class="request-message" role="status">Already in Readarr</p>'
+            else:
+                action = (
+                    '<form class="result-actions" action="/library/request/confirm/" method="get">'
+                    '<input type="hidden" name="token" value="{}">'
+                    '<button type="submit">Review {}</button></form>'
+                ).format(escape(token, quote=True), kind)
+            if kind == "book":
+                detail = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
+                if candidate.year:
+                    detail += " · {}".format(candidate.year)
+                explanation = (
+                    "This book is already in Readarr."
+                    if candidate.is_existing
+                    else "Requests this specific book."
+                )
+            else:
+                detail = ""
+                explanation = (
+                    "This author is already monitored by Readarr."
+                    if candidate.is_existing
+                    else "This adds the author and searches monitored books."
+                )
+            rows.append(
+                '<article class="request-result"><span class="result-kind">{}</span>'
+                '<h4 class="result-title">{}</h4><p class="result-byline">{}</p>'
+                '<p class="result-explanation">{}</p>{}</article>'.format(
+                    "Book" if kind == "book" else "Author",
+                    escape(candidate.title),
+                    detail,
+                    explanation,
+                    action,
+                )
             )
-        )
-        rows.append(
-            '<div class="catalog-row"><div class="catalog-name"><strong>{}</strong>{}</div>{}</div>'.format(
-                escape(candidate.title), author, action
+        if rows:
+            groups.append(
+                '<section class="result-group" data-result-kind="{}">'
+                '<h3 class="result-heading">{}</h3>{}</section>'.format(
+                    kind, heading, "".join(rows)
+                )
             )
-        )
-    content = "".join(rows) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Search results</h2><section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(content)
+    content = "".join(groups) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
+    refine_form = (
+        '<form class="request-form refine-search" action="/library/request/search/" method="get">'
+        '<label for="request-query">Refine your search</label>'
+        '<input id="request-query" name="term" type="search" enterkeyhint="search" '
+        'autocomplete="off" required value="{}"><button type="submit">Search again</button></form>'
+    ).format(escape(term, quote=True))
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Search results</h2>{}<section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(refine_form, content)
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Search results - The Library of Bex")
 
 
 def request_confirmation(candidate, token, previews=None):
-    author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Confirm request</h2><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></div>'.format(
-        escape(candidate.title), author, escape(token, quote=True)
+    if candidate.kind == "book":
+        author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
+        action = "This will add this book to Readarr and start an automatic search."
+    else:
+        author = ""
+        action = "This will add this author to Readarr and start automatic searches for monitored books."
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Confirm request</h2><p class="request-intro"><strong>{}</strong>{}</p><p class="request-intro">{}</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form><p><a class="open-shelf" href="/library/request/">Cancel and search again</a></p></div>'.format(
+        escape(candidate.title), author, action, escape(token, quote=True)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Confirm request - The Library of Bex")
 
 
 def request_success(candidate, previews=None):
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></div>'.format(escape(candidate.title))
+    progress = (
+        "Readarr is monitoring the book and searching configured indexers. "
+        "If a matching release is found, the download client will fetch it and Readarr will import it."
+        if candidate.kind == "book"
+        else
+        "Readarr is monitoring the author and searching configured indexers for the selected monitored books."
+    )
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p><p class="request-intro">{}</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a><a class="open-shelf" href="/library/">Return to the library</a></nav></div>'.format(
+        escape(candidate.title), progress
+    )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Request received - The Library of Bex")
 
 

@@ -330,7 +330,11 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 )
                 return
             self.send_html(
-                request_results(results, previews=self.shelf_previews()),
+                request_results(
+                    results,
+                    term=term,
+                    previews=self.shelf_previews(),
+                ),
                 send_body,
             )
 

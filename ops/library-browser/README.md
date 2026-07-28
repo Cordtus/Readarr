@@ -93,9 +93,18 @@ protected configuration, stop the active supervisor with the same sequence,
 and let cron restart it; do not alter either media root. Caddy, UFW, and
 Fail2ban remain outside this deployment scope.
 
+Search results deliberately separate books from authors. A book request adds
+and searches that specific book. An author request is broader: it adds the
+author and searches the books selected by the configured monitoring policy.
+The confirmation page states which action will occur before its single-use
+POST token is consumed. A success response confirms Readarr acceptance; it
+does not promise that an indexer has a matching release.
+
 ## Responsive bookcase verification
 
-The landing page and every request state share the same bookcase shell. With
+The landing page and every request state share the same reading-room and
+bookcase shell. On narrow screens the room remains visible around the inset
+cabinet, while request content uses the established parchment surface. With
 JavaScript enabled, one shelf is pinned open at a time; without JavaScript, all
 panels remain in document flow so catalog links and request forms still work.
 Books and Audiobooks previews use the same root-bound filtering as their

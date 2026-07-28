@@ -543,7 +543,10 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(self.readarr_client.searches, ["Dangerous title"])
         self.assertEqual(self.readarr_client.requests, [])
         self.assertEqual(
-            [strong.text_content() for strong in request_panel.descendants("strong")],
+            [
+                heading.text_content()
+                for heading in request_panel.descendants("h4", **{"class": "result-title"})
+            ],
             ["A <dangerous> title"],
         )
         self.assertEqual(
@@ -551,6 +554,123 @@ class LibraryBrowserTest(unittest.TestCase):
             [],
         )
         self.assertIn("Author & Co.", request_panel.text_content())
+
+    def test_search_results_identify_books_and_authors_and_allow_refining_query(self):
+        self.readarr_client.candidates = [
+            readarr.Candidate(
+                kind="author",
+                foreign_id="author-1",
+                title="Jane Austen",
+                author_name="Jane Austen",
+                is_existing=False,
+                lookup={"author": {"foreignAuthorId": "author-1"}},
+            ),
+            readarr.Candidate(
+                kind="book",
+                foreign_id="book-1",
+                title="Pride and Prejudice",
+                author_name="Jane Austen",
+                is_existing=False,
+                lookup={"book": {"foreignBookId": "book-1"}},
+                year=1813,
+            ),
+        ]
+
+        response, body = self.request(
+            "GET", "/request/search/?term=Pride%20and%20Prejudice"
+        )
+        request_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+        result_groups = request_panel.descendants("section", **{"data-result-kind": "book"})
+        author_groups = request_panel.descendants(
+            "section", **{"data-result-kind": "author"}
+        )
+        refine_inputs = request_panel.descendants("input", name="term")
+        buttons = [
+            button.text_content()
+            for button in request_panel.descendants("button")
+        ]
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(result_groups), 1)
+        self.assertEqual(len(author_groups), 1)
+        self.assertIn("Pride and Prejudice", result_groups[0].text_content())
+        self.assertIn("1813", result_groups[0].text_content())
+        self.assertIn("Jane Austen", author_groups[0].text_content())
+        self.assertIn("adds the author and searches monitored books", author_groups[0].text_content())
+        self.assertEqual(
+            [input_.attributes.get("value") for input_ in refine_inputs],
+            ["Pride and Prejudice"],
+        )
+        self.assertIn("Review book", buttons)
+        self.assertIn("Review author", buttons)
+        self.assertEqual(self.readarr_client.requests, [])
+
+    def test_confirmation_and_success_explain_the_exact_book_action(self):
+        token, _ = self.search_for_candidate()
+
+        response, body = self.request(
+            "GET", "/request/confirm/?token=" + urllib.parse.quote(token)
+        )
+        confirmation_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+
+        self.assertEqual(response.status, 200)
+        self.assertIn(
+            "add this book to Readarr and start an automatic search",
+            confirmation_panel.text_content(),
+        )
+
+        response, body = self.request(
+            "POST",
+            "/request/confirm/",
+            urllib.parse.urlencode({"token": token}),
+            self.same_origin_headers(),
+        )
+        success_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+        destinations = {
+            link.attributes.get("href")
+            for link in success_panel.descendants("a")
+        }
+
+        self.assertEqual(response.status, 200)
+        self.assertIn(
+            "Readarr is monitoring the book and searching configured indexers",
+            success_panel.text_content(),
+        )
+        self.assertIn("/library/request/", destinations)
+        self.assertIn("/library/", destinations)
+
+    def test_author_confirmation_explains_the_broader_monitoring_action(self):
+        self.readarr_client.candidates = [
+            readarr.Candidate(
+                kind="author",
+                foreign_id="author-1",
+                title="Jane Austen",
+                author_name="Jane Austen",
+                is_existing=False,
+                lookup={"author": {"foreignAuthorId": "author-1"}},
+            )
+        ]
+        token, _ = self.search_for_candidate()
+
+        response, body = self.request(
+            "GET", "/request/confirm/?token=" + urllib.parse.quote(token)
+        )
+        request_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+
+        self.assertEqual(response.status, 200)
+        self.assertIn(
+            "add this author to Readarr and start automatic searches for monitored books",
+            request_panel.text_content(),
+        )
+        self.assertEqual(self.readarr_client.requests, [])
 
     def test_request_workflow_states_remain_inside_the_request_shelf(self):
         token, search_html = self.search_for_candidate()
@@ -567,7 +687,10 @@ class LibraryBrowserTest(unittest.TestCase):
                 (form.attributes["action"], form.attributes["method"])
                 for form in search_panel[0].descendants("form")
             ],
-            [("/library/request/confirm/", "get")],
+            [
+                ("/library/request/search/", "get"),
+                ("/library/request/confirm/", "get"),
+            ],
         )
 
         response, body = self.request(
@@ -648,9 +771,18 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(
             [status.text_content() for status in request_panel.descendants(role="status")],
-            ["Already in the library", "Already in the library"],
+            ["Already in Readarr", "Already in Readarr"],
         )
-        self.assertEqual(request_panel.descendants("form"), [])
+        self.assertIn("This author is already monitored by Readarr.", request_panel.text_content())
+        self.assertIn("This book is already in Readarr.", request_panel.text_content())
+        self.assertNotIn("This adds the author", request_panel.text_content())
+        self.assertEqual(
+            [
+                (form.attributes["action"], form.attributes["method"])
+                for form in request_panel.descendants("form")
+            ],
+            [("/library/request/search/", "get")],
+        )
         self.assertEqual(request_panel.descendants("input", name="token"), [])
         self.assertEqual(candidate_store.candidates, {})
         self.assertEqual(self.readarr_client.requests, [])

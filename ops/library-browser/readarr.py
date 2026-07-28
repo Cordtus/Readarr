@@ -43,6 +43,7 @@ class Candidate:
     author_name: str
     is_existing: bool
     lookup: Mapping[str, Any]
+    year: Optional[int] = None
 
 
 class CandidateStore:
@@ -171,6 +172,7 @@ class ReadarrClient:
             foreign_id = book.get("foreignBookId") or item.get("foreignId")
             title = book.get("title")
             author_name = author.get("authorName", "")
+            year = self._release_year(book.get("releaseDate"))
             if not isinstance(foreign_id, str) or not isinstance(title, str):
                 raise ReadarrError("Readarr returned an invalid book result")
             return Candidate(
@@ -180,6 +182,7 @@ class ReadarrClient:
                 author_name=author_name if isinstance(author_name, str) else "",
                 is_existing=bool(book.get("id")),
                 lookup=copy.deepcopy(dict(item)),
+                year=year,
             )
         author = item.get("author")
         if isinstance(author, Mapping):
@@ -196,6 +199,16 @@ class ReadarrClient:
                 lookup=copy.deepcopy(dict(item)),
             )
         raise ReadarrError("Readarr returned an invalid search result")
+
+    @staticmethod
+    def _release_year(value):
+        if not isinstance(value, str) or len(value) < 4:
+            return None
+        try:
+            year = int(value[:4])
+        except ValueError:
+            return None
+        return year if 1 <= year <= 9999 else None
 
     def _send(self, method, path, payload=None):
         body = None if payload is None else json.dumps(payload).encode("utf-8")

@@ -95,6 +95,7 @@ class ReadarrClientTest(unittest.TestCase):
             "book": {
                 "foreignBookId": "book-1",
                 "title": "A title",
+                "releaseDate": "1813-01-28T00:00:00Z",
                 "author": {"authorName": "An author"},
                 "links": [{"url": "https://untrusted.example/private"}],
             },
@@ -108,7 +109,38 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(candidates[0].title, "A title")
         self.assertEqual(candidates[0].author_name, "An author")
         self.assertEqual(candidates[0].foreign_id, "book-1")
+        self.assertEqual(candidates[0].year, 1813)
         self.assertFalse(candidates[0].is_existing)
+
+    def test_search_keeps_book_and_author_results_distinct(self):
+        self.responses.append(FakeResponse(200, [
+            {
+                "foreignId": "author-1",
+                "author": {
+                    "foreignAuthorId": "author-1",
+                    "authorName": "Jane Austen",
+                },
+            },
+            {
+                "foreignId": "book-1",
+                "book": {
+                    "foreignBookId": "book-1",
+                    "title": "Pride and Prejudice",
+                    "releaseDate": "1813",
+                    "author": {"authorName": "Jane Austen"},
+                },
+            },
+        ]))
+
+        candidates = self.client.search("Pride and Prejudice")
+
+        self.assertEqual(
+            [(candidate.kind, candidate.title, candidate.year) for candidate in candidates],
+            [
+                ("author", "Jane Austen", None),
+                ("book", "Pride and Prejudice", 1813),
+            ],
+        )
 
     def test_add_request_preserves_readarr_add_options(self):
         self.responses.append(FakeResponse(201, {"id": 99, "title": "A title"}))
