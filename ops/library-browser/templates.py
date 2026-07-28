@@ -75,7 +75,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .bookcase .shelves { display: block; }
 .shelf-tabs {
   display: none;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: .5rem;
 }
 .js .shelf-tabs { display: grid; }
