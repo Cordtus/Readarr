@@ -397,17 +397,40 @@ class LibraryBrowserTest(unittest.TestCase):
     def test_landing_page_exposes_catalog_destinations_and_inline_request_form(self):
         response, body = self.request("GET", "/")
         document = parse_html(body.decode())
+        landing = [
+            main
+            for main in document.descendants("main")
+            if "landing" in main.attributes.get("class", "").split()
+        ][0]
         destinations = {
             link.attributes.get("href")
             for link in document.descendants("a")
         }
         request_panel = document.descendants(id="shelf-request-panel")
+        shelf_buttons = [
+            button
+            for button in landing.descendants("button")
+            if "aria-controls" in button.attributes
+        ]
 
         self.assertEqual(response.status, 200)
+        self.assertEqual(
+            [child.tag for child in landing.children],
+            ["header", "nav", "aside"],
+        )
         self.assertEqual(
             [heading.text_content() for heading in document.descendants("h1")],
             ["The Library of Bex"],
         )
+        self.assertEqual(
+            [button.attributes["aria-expanded"] for button in shelf_buttons],
+            ["false", "false", "false"],
+        )
+        control_groups = landing.descendants(
+            "div", role="group", **{"aria-label": "Choose a shelf"}
+        )
+        self.assertEqual(len(control_groups), 1)
+        self.assertEqual(control_groups[0].descendants("button"), shelf_buttons)
         self.assertEqual(
             {"/library/Books/", "/library/Audiobooks/"} - destinations,
             set(),

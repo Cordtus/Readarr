@@ -44,56 +44,53 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 @media (max-width: 650px) { .plaque { justify-self: stretch; } .catalog-header { display: block; } .count { margin-top: .8rem; } .catalog-row { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem 1rem; } .catalog-meta { grid-column: 1; } .download { grid-column: 2; grid-row: 1 / span 2; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 
-/* The bookcase is the navigation: one piece of furniture, not a card grid. */
-.landing {
+/* The room is the surface; each shelf floats independently over it. */
+.landing.bookcase {
   min-height: 100svh;
   min-height: 100dvh;
-  place-items: center start;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: .8rem;
   padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
   background-position: center;
 }
-.landing-card.bookcase {
+.bookcase .plaque,
+.bookcase .shelves,
+.bookcase .archives-notice {
   width: min(27rem, 100%);
-  min-height: min(48rem, calc(100dvh - 2rem));
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  align-items: stretch;
-  overflow: clip;
-  border: 1px solid rgba(227, 181, 94, .58);
-  border-radius: 2px;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,.035), transparent 12%, transparent 88%, rgba(0,0,0,.18)),
-    repeating-linear-gradient(2deg, #3d2118 0, #3d2118 8px, #43251a 9px, #382016 13px);
-  box-shadow:
-    inset 0 0 0 7px rgba(21, 10, 7, .45),
-    inset 0 0 3rem rgba(8, 3, 2, .45),
-    0 1.5rem 4rem rgba(0,0,0,.45);
 }
 .bookcase .plaque {
   justify-self: auto;
-  margin: 1.25rem 1.25rem .8rem;
-  padding: 1rem 1.15rem 1.1rem;
-  text-align: center;
-  box-shadow: inset 0 0 0 3px rgba(38,19,12,.5), 0 .7rem 1.4rem rgba(0,0,0,.26);
+  margin: 0;
+  padding: 0 0 .65rem;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  text-shadow: 0 2px 3px rgba(18,8,5,.95), 0 0 1.2rem rgba(18,8,5,.85);
 }
 .bookcase .plaque h1 { font-size: clamp(2rem, 7vw, 3.25rem); line-height: .92; }
 .bookcase .shelves { display: block; }
-.shelf {
-  margin: 0 1.15rem .8rem;
-  border: 1px solid rgba(235,190,105,.42);
-  background: rgba(20, 9, 6, .42);
-  box-shadow: inset 0 -8px 0 rgba(13,6,4,.38), 0 .65rem 1rem rgba(0,0,0,.2);
+.shelf-tabs {
+  display: none;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+}
+.js .shelf-tabs { display: grid; }
+.shelf-panels {
+  margin-top: .5rem;
+  box-shadow: 0 .65rem 1.4rem rgba(0,0,0,.24);
 }
 .shelf-trigger {
   width: 100%;
   min-height: 4.25rem;
   display: none;
-  padding: .85rem 1rem;
+  padding: .75rem .45rem;
   color: #f8e7bd;
-  text-align: left;
-  border: 0;
-  border-bottom: 1px solid rgba(235,190,105,.24);
+  text-align: center;
+  border: 1px solid rgba(235,190,105,.62);
   border-radius: 0;
   background: linear-gradient(180deg, rgba(111,64,42,.94), rgba(60,32,23,.96));
   box-shadow: inset 0 1px rgba(255,255,255,.08), inset 0 -5px rgba(14,7,5,.25);
@@ -103,8 +100,8 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   transition: filter 180ms cubic-bezier(.16,1,.3,1), transform 180ms cubic-bezier(.16,1,.3,1);
 }
 .js .shelf-trigger { display: block; }
-.shelf-trigger strong { display: block; font: 500 1.2rem/1.1 Georgia, 'Times New Roman', serif; }
-.shelf-trigger span { display: block; margin-top: .28rem; color: #e6c98e; font: .76rem/1.35 Arial, sans-serif; letter-spacing: .02em; }
+.shelf-trigger strong { display: block; font: 500 clamp(.86rem, 3.6vw, 1rem)/1.1 Georgia, 'Times New Roman', serif; white-space: nowrap; }
+.shelf-trigger span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .shelf-trigger[aria-expanded="true"] { filter: brightness(1.12); }
 .shelf-trigger:active { transform: scale(.985); }
 .shelf-trigger:focus-visible,
@@ -114,8 +111,11 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   padding: 1rem;
   color: #f7e8c7;
   background: rgba(19,9,6,.68);
+  border: 1px solid rgba(235,190,105,.42);
+  border-top: 0;
   font: .9rem/1.45 Arial, sans-serif;
 }
+.shelf-panel + .shelf-panel { border-top: 1px solid rgba(235,190,105,.28); }
 .shelf-panel ul { margin: 0 0 .85rem; padding: 0; list-style: none; }
 .shelf-panel li { padding: .25rem 0; overflow-wrap: anywhere; }
 .shelf-panel li + li { border-top: 1px solid rgba(231,198,135,.18); }
@@ -149,32 +149,28 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .result-actions { margin: .65rem 0 0; }
 .refine-search { margin-bottom: 1.2rem; padding-bottom: 1.2rem; border-bottom: 1px solid rgba(231,198,135,.24); }
 .request-links { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: 1rem; }
-.bookcase .archives-notice { margin: auto 1.25rem 1.25rem; padding: .8rem 0 0; background: transparent; border: 0; border-top: 1px solid rgba(194,148,70,.36); text-align: center; }
+.bookcase .archives-notice { margin: 0; padding: .7rem 0 0; background: transparent; border: 0; border-top: 1px solid rgba(194,148,70,.5); text-align: left; text-shadow: 0 1px 3px rgba(18,8,5,.95); }
 .js .shelf-panel { animation: shelf-enter 260ms cubic-bezier(.16,1,.3,1) both; }
+.js.keyboard-navigation .shelf-panel { animation: none; }
 @keyframes shelf-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @media (hover: hover) and (pointer: fine) {
   .shelf-trigger:hover { filter: brightness(1.14); }
   .bookcase form button:hover { background: #603625; }
 }
 @media (max-width: 759px) {
-  .landing {
+  .landing.bookcase {
     min-height: 100svh;
-    display: flex;
-    align-items: flex-start;
-    padding: max(clamp(5rem, 16svh, 8rem), env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
+    justify-content: flex-start;
+    padding: max(clamp(2.5rem, 8svh, 5rem), env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(.75rem, env(safe-area-inset-left));
     background-position: center;
   }
-  .landing-card.bookcase {
+  .bookcase .plaque,
+  .bookcase .shelves,
+  .bookcase .archives-notice {
     width: min(100%, 35rem);
-    min-height: 0;
-    margin: 0 auto;
-    background:
-      linear-gradient(90deg, rgba(255,255,255,.05), transparent 14%, transparent 86%, rgba(0,0,0,.14)),
-      repeating-linear-gradient(2deg, rgba(61,33,24,.94) 0, rgba(61,33,24,.94) 8px, rgba(67,37,26,.94) 9px, rgba(56,32,22,.94) 13px);
-    box-shadow: inset 0 0 0 6px rgba(21,10,7,.42), 0 1rem 3rem rgba(0,0,0,.42);
+    margin-right: auto;
+    margin-left: auto;
   }
-  .bookcase .plaque { margin-top: 1rem; }
-  .shelf { margin-right: 1rem; margin-left: 1rem; }
   .bookcase .request-desk {
     padding: 1rem;
     color: var(--ink);
@@ -196,9 +192,6 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   .refine-search { border-bottom-color: rgba(74,41,29,.24); }
 }
 @media (max-width: 319px) {
-  .bookcase .plaque,
-  .shelf,
-  .bookcase .archives-notice { margin-right: .5rem; margin-left: .5rem; }
   .shelf-panel { padding: .75rem; }
   .bookcase .request-form button {
     width: 100%;
@@ -212,10 +205,10 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   .shelf-trigger { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .landing-card.bookcase, .shelf-panel { background-color: #342018; }
+  .shelf-panel { background-color: #342018; }
 }
 @media (prefers-contrast: more) {
-  .shelf, .landing-card.bookcase, .shelf-trigger { border-color: #f8d27c; }
+  .shelf-trigger { border-color: #f8d27c; }
   .shelf-trigger span, .shelf-panel, .bookcase .request-intro { color: #fff0cc; }
 }
 @media (max-width: 759px) and (prefers-contrast: more) {
@@ -235,7 +228,7 @@ BOOKCASE_SCRIPT = """
   const triggers = [...document.querySelectorAll('.shelf-trigger')];
   if (!triggers.length) return;
   root.classList.add('js');
-  let pinned = triggers.find((trigger) => trigger.getAttribute('aria-expanded') === 'true') || triggers[0];
+  let pinned = triggers.find((trigger) => trigger.getAttribute('aria-expanded') === 'true') || null;
   const panelFor = (trigger) => document.getElementById(trigger.getAttribute('aria-controls'));
   const showOnly = (active) => {
     triggers.forEach((trigger) => {
@@ -244,12 +237,64 @@ BOOKCASE_SCRIPT = """
       panelFor(trigger).hidden = !selected;
     });
   };
+  const setTriggerOrder = (active = null) => {
+    triggers.forEach((trigger) => {
+      trigger.tabIndex = active && trigger !== active ? -1 : 0;
+    });
+  };
   showOnly(pinned);
+  setTriggerOrder(pinned);
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const navigation = triggers[0].closest('.shelves');
   triggers.forEach((trigger) => {
     trigger.addEventListener('click', () => {
-      pinned = trigger;
+      pinned = pinned === trigger ? null : trigger;
+      setTriggerOrder(pinned);
       showOnly(pinned);
     });
+    trigger.addEventListener('pointerdown', () => root.classList.remove('keyboard-navigation'));
+    trigger.addEventListener('focus', () => {
+      root.classList.add('keyboard-navigation');
+      setTriggerOrder(trigger);
+      showOnly(trigger);
+    });
+    trigger.addEventListener('keydown', (event) => {
+      const current = triggers.indexOf(trigger);
+      let next = null;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        next = triggers[(current + 1) % triggers.length];
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        next = triggers[(current - 1 + triggers.length) % triggers.length];
+      } else if (event.key === 'Home') {
+        next = triggers[0];
+      } else if (event.key === 'End') {
+        next = triggers[triggers.length - 1];
+      } else if (event.key === 'Escape') {
+        pinned = null;
+        setTriggerOrder();
+        showOnly(null);
+        return;
+      }
+      if (next) {
+        event.preventDefault();
+        next.focus();
+      }
+    });
+    trigger.addEventListener('pointerenter', () => {
+      if (canHover.matches) {
+        root.classList.remove('keyboard-navigation');
+        showOnly(trigger);
+      }
+    });
+  });
+  navigation.addEventListener('focusout', (event) => {
+    if (!navigation.contains(event.relatedTarget)) {
+      setTriggerOrder();
+      showOnly(pinned);
+    }
+  });
+  navigation.addEventListener('pointerleave', () => {
+    if (canHover.matches) showOnly(pinned);
   });
 })();
 </script>
@@ -294,9 +339,10 @@ def preview_panel(preview):
     )
 
 
-def library_shell(previews, *, active_shelf="books", request_content="", title="The Library of Bex"):
+def library_shell(previews, *, active_shelf=None, request_content="", title="The Library of Bex"):
     preview_by_id = {preview["id"]: preview for preview in previews or ()}
-    shelves = []
+    triggers = []
+    panels = []
     for shelf_id, label, description in SHELVES:
         expanded = shelf_id == active_shelf
         if shelf_id == "request":
@@ -309,36 +355,40 @@ def library_shell(previews, *, active_shelf="books", request_content="", title="
                 "entries": (),
             })
             panel_content = preview_panel(preview)
-        shelves.append(
-            '<section class="shelf" data-shelf="{}">'
+        triggers.append(
             '<button class="shelf-trigger" type="button" id="shelf-{}-trigger" '
             'aria-label="{}" aria-expanded="{}" aria-controls="shelf-{}-panel">'
-            '<strong>{}</strong><span>{}</span></button>'
-            '<div class="shelf-panel" id="shelf-{}-panel" role="region" '
-            'aria-labelledby="shelf-{}-trigger">{}</div></section>'.format(
-                shelf_id,
+            '<strong>{}</strong><span>{}</span></button>'.format(
                 shelf_id,
                 escape(label, quote=True),
                 str(expanded).lower(),
                 shelf_id,
                 escape(label),
                 escape(description),
+            )
+        )
+        panels.append(
+            '<section class="shelf-panel" data-shelf="{}" id="shelf-{}-panel" '
+            'role="region" aria-labelledby="shelf-{}-trigger">{}</section>'.format(
+                shelf_id,
                 shelf_id,
                 shelf_id,
                 panel_content,
             )
         )
     body = (
-        '<main class="landing"><div class="landing-card bookcase">'
+        '<main class="landing bookcase">'
         '<header class="plaque"><p class="plaque-kicker">A private collection</p>'
         '<h1 id="library-title">The Library<br>of Bex</h1></header>'
-        '<nav class="shelves" aria-label="Library shelves">{}</nav>{}</div></main>'
-    ).format("".join(shelves), archives_notice())
+        '<nav class="shelves" aria-label="Library shelves">'
+        '<div class="shelf-tabs" role="group" aria-label="Choose a shelf">{}</div>'
+        '<div class="shelf-panels">{}</div></nav>{}</main>'
+    ).format("".join(triggers), "".join(panels), archives_notice())
     return page(title, body, body_class="landing-page")
 
 
 def landing(previews=None):
-    return library_shell(previews or (), active_shelf="books")
+    return library_shell(previews or (), active_shelf=None)
 
 
 def archives_notice():

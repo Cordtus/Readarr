@@ -102,11 +102,13 @@ does not promise that an indexer has a matching release.
 
 ## Responsive bookcase verification
 
-The landing page and every request state share the same reading-room and
-bookcase shell. On narrow screens the room remains visible around the inset
-cabinet, while request content uses the established parchment surface. With
-JavaScript enabled, one shelf is pinned open at a time; without JavaScript, all
-panels remain in document flow so catalog links and request forms still work.
+The landing page and every request state share the same reading-room shell.
+There is no outer cabinet surface: the identity sits directly over the room,
+and Books, Audiobooks, and Request form one horizontal mobile-first shelf row.
+The landing starts fully collapsed; tapping a shelf opens its full-width panel,
+and pointer hover previews it on hover-capable devices. Routed request states
+open Request automatically. Without JavaScript, all panels remain in document
+flow so catalog links and request forms still work.
 Books and Audiobooks previews use the same root-bound filtering as their
 catalog routes.
 

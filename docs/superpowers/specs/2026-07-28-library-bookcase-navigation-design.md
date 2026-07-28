@@ -9,35 +9,37 @@ making late-model iPhones and iOS Safari the primary interaction target.
 
 ## Visual Composition
 
-The desktop page places a narrow, built-in dark-wood bookcase along the left
-side of the reading-room scene. The identity plaque is integrated into its top:
-`A private collection` above `The Library of Bex`. There is no floating room
-tagline, including the rejected copy `A room to browse, listen, and ask for the
-next book`.
+The reading-room scene remains the page surface. A background-free identity
+heading sits above a compact shelf selector: `A private collection` above
+`The Library of Bex`. There is no outer cabinet or card obscuring the room and
+no floating room tagline, including the rejected copy `A room to browse,
+listen, and ask for the next book`.
 
-Three horizontal shelf fronts sit below the plaque:
+Three shelf fronts sit in one horizontal row below the heading:
 
 - `Books` - `Open the shelves and see what is ready to read.`
 - `Audiobooks` - `Settle in with something worth hearing.`
 - `Request a book` - `Search by title, author, or ISBN without leaving the room.`
 
 The shelves use wood grain, inset shadow, and restrained brass detail to read
-as furniture, not cards or conventional buttons. The passive archives notice
-becomes a quiet inscription at the foot of the bookcase rather than a separate
-card. The existing warm reading-room image, walnut, copper, paper, serif type,
-and calligraphic identity remain the visual foundation.
+as furniture, not cards or conventional tabs. The passive archives notice is
+a quiet inscription below the controls rather than a separate card. The
+existing warm reading-room image, walnut, copper, paper, serif type, and
+calligraphic identity remain the visual foundation.
 
-On narrow screens, the scene retains a shallow atmospheric area above a
-full-width cabinet. Labels become horizontal touch targets; no vertical spine
-text is used. The cabinet stays in normal document flow so the page can scroll
-correctly around the iOS software keyboard.
+On narrow screens, the three collapsed controls remain in one row with 44px
+or larger touch targets. Their shared expanded panel opens below the row in
+normal document flow so the page scrolls correctly around the iOS software
+keyboard while the room remains visible around it.
 
 ## Shelf Interaction
 
-Only one shelf is pinned open at a time. On pointer-accurate desktop devices,
-hover may reveal a temporary preview; click pins it. Keyboard focus and
-activation provide the same states. Touch devices never depend on hover: one
-tap expands a shelf, and another shelf tap transfers the open state.
+The landing starts with every shelf collapsed. Only one shelf is open at a
+time. On pointer-accurate desktop devices, hover reveals a temporary preview
+and click pins it. Keyboard focus and activation provide the same states.
+Touch devices never depend on hover: one tap expands a shelf, a second tap
+collapses it, and tapping another shelf transfers the open state. Routed
+request states open the Request shelf automatically.
 
 Books and Audiobooks show server-rendered item counts, an honest empty state,
 and up to three recent entries. An `Open shelf` link navigates to the existing
