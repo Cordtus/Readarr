@@ -75,7 +75,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .bookcase .shelves { display: block; }
 .shelf-tabs {
   display: none;
-  width: min(100%, 14rem);
+  width: 56px;
   grid-template-columns: minmax(0, 1fr);
   gap: .5rem;
 }
@@ -85,12 +85,14 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   box-shadow: 0 .65rem 1.4rem rgba(0,0,0,.24);
 }
 .shelf-trigger {
-  width: 100%;
-  min-height: 4.25rem;
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
   display: none;
-  padding: .75rem .45rem;
+  align-items: center;
+  justify-content: center;
+  padding: .75rem;
   color: #f8e7bd;
-  text-align: center;
   border: 1px solid rgba(235,190,105,.62);
   border-radius: 0;
   background: linear-gradient(180deg, rgba(111,64,42,.94), rgba(60,32,23,.96));
@@ -100,9 +102,8 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   touch-action: manipulation;
   transition: filter 180ms cubic-bezier(.16,1,.3,1), transform 180ms cubic-bezier(.16,1,.3,1);
 }
-.js .shelf-trigger { display: block; }
-.shelf-trigger strong { display: block; font: 500 clamp(.86rem, 3.6vw, 1rem)/1.1 Georgia, 'Times New Roman', serif; white-space: nowrap; }
-.shelf-trigger span { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.js .shelf-trigger { display: flex; }
+.shelf-trigger svg { width: 28px; height: 28px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; fill: none; }
 .shelf-trigger[aria-expanded="true"] { filter: brightness(1.12); }
 .shelf-trigger:active { transform: scale(.985); }
 .shelf-trigger:focus-visible,
@@ -309,9 +310,9 @@ def page(title, body, *, body_class=""):
 
 
 SHELVES = (
-    ("books", "Books", "Open the shelves and see what is ready to read."),
-    ("audiobooks", "Audiobooks", "Settle in with something worth hearing."),
-    ("request", "Request a book", "Search by title, author, or ISBN without leaving the room."),
+    ("books", "Books", '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3.5 5.5c3.5-1.2 6.2-.6 8.5 1.6v12c-2.3-2.2-5-2.8-8.5-1.6z"/><path d="M20.5 5.5c-3.5-1.2-6.2-.6-8.5 1.6v12c2.3-2.2 5-2.8 8.5-1.6z"/></svg>'),
+    ("audiobooks", "Audiobooks", '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 13h3v6H5a1 1 0 0 1-1-1z"/><path d="M20 13h-3v6h2a1 1 0 0 0 1-1z"/><path d="M17 19c0 1.4-1.8 2-5 2"/></svg>'),
+    ("request", "Request a book", '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/><path d="M18 4v4"/><path d="M16 6h4"/></svg>'),
 )
 
 
@@ -344,7 +345,7 @@ def library_shell(previews, *, active_shelf=None, request_content="", title="The
     preview_by_id = {preview["id"]: preview for preview in previews or ()}
     triggers = []
     panels = []
-    for shelf_id, label, description in SHELVES:
+    for shelf_id, label, icon in SHELVES:
         expanded = shelf_id == active_shelf
         if shelf_id == "request":
             panel_content = request_content or request_form()
@@ -359,13 +360,12 @@ def library_shell(previews, *, active_shelf=None, request_content="", title="The
         triggers.append(
             '<button class="shelf-trigger" type="button" id="shelf-{}-trigger" '
             'aria-label="{}" aria-expanded="{}" aria-controls="shelf-{}-panel">'
-            '<strong>{}</strong><span>{}</span></button>'.format(
+            '{}</button>'.format(
                 shelf_id,
                 escape(label, quote=True),
                 str(expanded).lower(),
                 shelf_id,
-                escape(label),
-                escape(description),
+                icon,
             )
         )
         panels.append(
