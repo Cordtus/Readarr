@@ -113,8 +113,8 @@ def request_candidate_store(candidate_store=None):
 
 class LibraryServer(ThreadingHTTPServer):
     def __init__(self, server_address, request_handler_class, candidate_store):
-        super().__init__(server_address, request_handler_class)
         self._candidate_store = candidate_store
+        super().__init__(server_address, request_handler_class)
 
     def server_close(self):
         super().server_close()
@@ -151,7 +151,7 @@ def media_entries(media_root, directory=None):
             if not resolved.exists():
                 continue
             stat = resolved.stat()
-        except (OSError, ValueError):
+        except (OSError, RuntimeError, ValueError):
             continue
         relative = entry.relative_to(media_root)
         href = "/library/{}{}".format(media_root.name, url_path(relative))
@@ -466,10 +466,12 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             previews = []
             for name in ("Books", "Audiobooks"):
                 media_root = resolved_roots[name]
+                error = None
                 try:
                     entries = media_entries(media_root)
                 except OSError:
                     entries = []
+                    error = "The {} shelf cannot be read right now.".format(name)
                 entries.sort(
                     key=lambda entry: (
                         -entry["modified_timestamp"],
@@ -482,6 +484,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     "href": "/library/{}/".format(name),
                     "count": len(entries),
                     "entries": entries[:3],
+                    "error": error,
                 })
             return previews
 
@@ -520,7 +523,6 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             self.send_html(
                 catalog(
                     title,
-                    "/{}".format(name),
                     entries,
                     theme=theme,
                     breadcrumbs=breadcrumbs,
@@ -553,7 +555,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     self.send_error(HTTPStatus.NOT_FOUND)
                     return
                 stat = candidate.stat()
-            except (OSError, PermissionError, ValueError):
+            except (OSError, PermissionError, RuntimeError, ValueError):
                 self.send_error(HTTPStatus.FORBIDDEN)
                 return
             content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"

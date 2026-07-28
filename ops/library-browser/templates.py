@@ -4,42 +4,30 @@ from html import escape
 PAGE_STYLE = """
 :root { color-scheme: light; --ink: #2b211b; --paper: #f3e6c7; --paper-deep: #dfc99e; --walnut: #4a291d; --brass: #c29446; --copper: #b36a42; }
 * { box-sizing: border-box; }
-html { min-width: 320px; }
 body { margin: 0; color: var(--ink); background: #221813; font-family: Georgia, 'Times New Roman', serif; }
 a { color: inherit; }
 a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius: 2px; }
 .landing { min-height: 100vh; display: grid; place-items: center; padding: clamp(1.25rem, 4vw, 4rem); background: linear-gradient(90deg, rgba(27,13,9,.72), rgba(27,13,9,.12) 55%, rgba(27,13,9,.65)), url('/library/assets/reading-room.webp') center/cover; }
-.landing-card { width: min(100%, 70rem); display: grid; gap: clamp(2rem, 8vw, 7rem); align-items: end; grid-template-columns: minmax(12rem, .7fr) minmax(16rem, 1fr); }
 .plaque { justify-self: start; padding: 1.1rem 1.4rem 1.25rem; color: #f8e7bd; background: rgba(52, 27, 18, .88); border: 1px solid var(--brass); box-shadow: 0 0 0 5px rgba(38, 19, 12, .45), 0 1rem 3rem rgba(0,0,0,.35); }
 .plaque-kicker { margin: 0 0 .3rem; color: #e4b967; font: .7rem/1.2 Arial, sans-serif; letter-spacing: .18em; text-transform: uppercase; }
 .plaque h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3.3rem); line-height: .95; font-weight: 500; }
-.shelves { display: grid; gap: 1.2rem; }
-.shelf-link { position: relative; display: block; padding: 1.1rem 1.3rem 1rem 4.2rem; color: #f7e4ba; text-decoration: none; background: linear-gradient(#5f3625, #352017); border: 1px solid rgba(235, 190, 105, .6); box-shadow: inset 0 -8px 0 rgba(22, 11, 7, .35), 0 10px 18px rgba(0,0,0,.32); transition: transform .18s ease, filter .18s ease; }
-.shelf-link::before { content: ''; position: absolute; left: 1.25rem; top: .8rem; width: 1.8rem; height: 2.2rem; border: 2px solid var(--brass); border-radius: 2px; box-shadow: inset 5px 0 rgba(255,255,255,.12); }
-.shelf-link:hover { transform: translateY(-3px); filter: brightness(1.12); }
-.shelf-link strong { display: block; font-size: 1.35rem; font-weight: 500; }
-.shelf-link span { display: block; margin-top: .25rem; color: #e0bd7c; font: .76rem Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
-.request-link { border-color: rgba(235, 190, 105, .85); }
 .archives-notice { margin: .2rem 0 0; padding: .9rem 1.1rem; color: rgba(248, 231, 189, .72); background: rgba(36, 19, 13, .58); border-left: 2px solid rgba(194, 148, 70, .62); font: .82rem/1.45 Arial, sans-serif; }
 .archives-notice strong { display: block; color: #e4b967; font-size: .7rem; letter-spacing: .14em; text-transform: uppercase; }
 .archives-notice p { margin: .3rem 0 0; }
 .catalog-page { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); background: radial-gradient(circle at 20% 0, rgba(255,255,255,.55), transparent 35rem), var(--paper); }
-.request-page { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); background: radial-gradient(circle at 10% 0, rgba(255,255,255,.58), transparent 32rem), var(--paper); }
 .request-desk { width: min(100%, 42rem); margin: 0 auto; padding: clamp(1.4rem, 5vw, 3rem); background: rgba(255,250,235,.55); border: 1px solid rgba(74,41,29,.38); box-shadow: 0 .8rem 2.5rem rgba(50, 28, 16, .15); }
-.request-desk h1 { margin: 0; color: var(--walnut); font-size: clamp(2.2rem, 7vw, 4rem); font-weight: 500; line-height: .95; }
-.request-kicker { margin: 0 0 .45rem; color: #765d47; font: .72rem Arial, sans-serif; letter-spacing: .16em; text-transform: uppercase; }
 .request-intro { max-width: 35rem; margin: 1rem 0 1.7rem; color: #604938; line-height: 1.5; }
 .request-form { display: grid; gap: .65rem; }
 .request-form label { color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.request-form input { width: 100%; padding: .8rem .9rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 1rem Georgia, 'Times New Roman', serif; }
+.request-form input { width: 100%; min-height: 44px; padding: .8rem .9rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 16px Georgia, 'Times New Roman', serif; }
 .request-form input:focus { outline: 3px solid rgba(194,148,70,.55); outline-offset: 2px; }
-.request-form button { justify-self: start; padding: .75rem 1rem; color: #f8e7bd; background: var(--walnut); border: 1px solid var(--brass); font: .75rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
-.request-form button:hover { background: #603625; }
+.request-form button, .bookcase form button { min-width: 44px; min-height: 44px; justify-self: start; padding: .75rem 1rem; color: #f8e7bd; background: var(--walnut); border: 1px solid var(--brass); border-radius: 0; font: 700 16px/1.2 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; }
+.bookcase form button:active { background: #603625; transform: scale(.985); }
 .request-message { margin: 0 0 1.2rem; padding: .75rem .9rem; color: #5e412c; background: rgba(194,148,70,.14); border-left: 3px solid var(--copper); }
 .audio-catalog { --catalog-accent: var(--copper); --paper: #f0ddc2; }
 .catalog { width: min(100%, 62rem); margin: 0 auto; }
 .breadcrumb { margin-bottom: 2rem; color: #765d47; font: .82rem Arial, sans-serif; }
-.breadcrumb a { text-underline-offset: .2em; }
+.breadcrumb a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; text-underline-offset: .2em; }
 .catalog-header { display: flex; justify-content: space-between; gap: 1rem; align-items: end; border-bottom: 3px double var(--walnut); padding-bottom: 1rem; }
 .catalog-header h1 { margin: 0; font-size: clamp(2.2rem, 6vw, 4.4rem); font-weight: 500; line-height: .9; }
 .audio-catalog .catalog-header { border-color: var(--catalog-accent); }
@@ -49,11 +37,11 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .count { margin: 0; color: #765d47; font: .78rem Arial, sans-serif; white-space: nowrap; }
 .catalog-list { margin-top: 1.2rem; border-top: 1px solid rgba(74,41,29,.35); }
 .catalog-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 1.5rem; align-items: center; padding: 1rem .4rem; border-bottom: 1px solid rgba(74,41,29,.25); }
-.catalog-name { min-width: 0; overflow-wrap: anywhere; font-size: 1.1rem; }
+.catalog-name { min-width: 44px; min-height: 44px; display: flex; align-items: center; overflow-wrap: anywhere; font-size: 1.1rem; }
 .catalog-meta { color: #765d47; font: .78rem Arial, sans-serif; white-space: nowrap; }
-.download { color: var(--walnut); font: .78rem Arial, sans-serif; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-underline-offset: .2em; }
+.download { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: flex-end; color: var(--walnut); font: .78rem Arial, sans-serif; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-underline-offset: .2em; }
 .empty { margin-top: 2rem; padding: 3rem 1rem; color: #765d47; border: 1px dashed rgba(74,41,29,.5); text-align: center; font-style: italic; font-size: 1.2rem; }
-@media (max-width: 650px) { .landing-card { grid-template-columns: 1fr; gap: 3rem; } .plaque { justify-self: stretch; } .catalog-header { display: block; } .count { margin-top: .8rem; } .catalog-row { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem 1rem; } .catalog-meta { grid-column: 1; } .download { grid-column: 2; grid-row: 1 / span 2; } }
+@media (max-width: 650px) { .plaque { justify-self: stretch; } .catalog-header { display: block; } .count { margin-top: .8rem; } .catalog-row { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem 1rem; } .catalog-meta { grid-column: 1; } .download { grid-column: 2; grid-row: 1 / span 2; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 
 /* The bookcase is the navigation: one piece of furniture, not a card grid. */
@@ -109,6 +97,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   border-radius: 0;
   background: linear-gradient(180deg, rgba(111,64,42,.94), rgba(60,32,23,.96));
   box-shadow: inset 0 1px rgba(255,255,255,.08), inset 0 -5px rgba(14,7,5,.25);
+  font-size: 16px;
   cursor: pointer;
   touch-action: manipulation;
   transition: filter 180ms cubic-bezier(.16,1,.3,1), transform 180ms cubic-bezier(.16,1,.3,1);
@@ -120,7 +109,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .shelf-trigger:active { transform: scale(.985); }
 .shelf-trigger:focus-visible,
 .open-shelf:focus-visible,
-.request-form button:focus-visible { outline: 3px solid #f8d27c; outline-offset: 3px; }
+.bookcase form button:focus-visible { outline: 3px solid #f8d27c; outline-offset: 3px; }
 .shelf-panel {
   padding: 1rem;
   color: #f7e8c7;
@@ -155,6 +144,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 @keyframes shelf-enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @media (hover: hover) and (pointer: fine) {
   .shelf-trigger:hover { filter: brightness(1.14); }
+  .bookcase form button:hover { background: #603625; }
 }
 @media (max-width: 759px) {
   .landing {
@@ -177,6 +167,18 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   }
   .bookcase .plaque { margin-top: 1rem; }
   .shelf { margin-right: 1rem; margin-left: 1rem; }
+}
+@media (max-width: 319px) {
+  .bookcase .plaque,
+  .shelf,
+  .bookcase .archives-notice { margin-right: .5rem; margin-left: .5rem; }
+  .shelf-panel { padding: .75rem; }
+  .bookcase .request-form button {
+    width: 100%;
+    padding-right: .45rem;
+    padding-left: .45rem;
+    white-space: normal;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .js .shelf-panel { animation: none; }
@@ -237,7 +239,11 @@ def preview_panel(preview):
         "<li>{}</li>".format(escape(entry["name"]))
         for entry in preview["entries"]
     )
-    if entries:
+    if preview.get("error"):
+        contents = '<p class="shelf-empty" role="alert">{}</p>'.format(
+            escape(preview["error"])
+        )
+    elif entries:
         contents = "<ul>{}</ul>".format(entries)
     else:
         contents = '<p class="shelf-empty">{}</p>'.format(
@@ -273,7 +279,7 @@ def library_shell(previews, *, active_shelf="books", request_content="", title="
             '<button class="shelf-trigger" type="button" id="shelf-{}-trigger" '
             'aria-label="{}" aria-expanded="{}" aria-controls="shelf-{}-panel">'
             '<strong>{}</strong><span>{}</span></button>'
-            '<div class="shelf-panel" id="shelf-{}-panel" '
+            '<div class="shelf-panel" id="shelf-{}-panel" role="region" '
             'aria-labelledby="shelf-{}-trigger">{}</div></section>'.format(
                 shelf_id,
                 shelf_id,
@@ -291,7 +297,7 @@ def library_shell(previews, *, active_shelf="books", request_content="", title="
         '<main class="landing"><div class="landing-card bookcase">'
         '<header class="plaque"><p class="plaque-kicker">A private collection</p>'
         '<h1 id="library-title">The Library<br>of Bex</h1></header>'
-        '<div class="shelves" aria-label="Library shelves">{}</div>{}</div></main>'
+        '<nav class="shelves" aria-label="Library shelves">{}</nav>{}</div></main>'
     ).format("".join(shelves), archives_notice())
     return page(title, body, body_class="landing-page")
 
@@ -335,31 +341,31 @@ def request_results(results, previews=None):
             )
         )
     content = "".join(rows) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
-    request_content = '<div class="request-desk"><h2>Search results</h2><section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(content)
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Search results</h2><section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(content)
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Search results - The Library of Bex")
 
 
 def request_confirmation(candidate, token, previews=None):
     author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
-    request_content = '<div class="request-desk"><h2>Confirm request</h2><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></div>'.format(
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Confirm request</h2><p class="request-intro">Ask Readarr to add <strong>{}</strong>{} to the library?</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form></div>'.format(
         escape(candidate.title), author, escape(token, quote=True)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Confirm request - The Library of Bex")
 
 
 def request_success(candidate, previews=None):
-    request_content = '<div class="request-desk"><h2>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></div>'.format(escape(candidate.title))
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p></div>'.format(escape(candidate.title))
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Request received - The Library of Bex")
 
 
 def request_error(title, message, previews=None):
-    request_content = '<div class="request-desk"><h2>{}</h2><p class="request-message" role="alert">{}</p><p><a class="open-shelf" href="/library/request/">Return to the request desk</a></p></div>'.format(
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>{}</h2><p class="request-message" role="alert">{}</p><p><a class="open-shelf" href="/library/request/">Return to the request desk</a></p></div>'.format(
         escape(title), escape(message)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="{} - The Library of Bex".format(title))
 
 
-def catalog(title, root_url, entries, *, theme="books", breadcrumbs=None):
+def catalog(title, entries, *, theme="books", breadcrumbs=None):
     count = len(entries)
     noun = "item" if count == 1 else "items"
     rows = []

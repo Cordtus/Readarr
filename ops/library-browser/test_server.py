@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import socket
 import tempfile
 import threading
 import urllib.parse
@@ -201,7 +202,7 @@ class CandidatePreviewStoreTest(unittest.TestCase):
             previews = server.CandidatePreviewStore(
                 backing_store, ttl_seconds=60, clock=lambda: clock[0]
             )
-            token = previews.put({"title": "A candidate"})
+            previews.put({"title": "A candidate"})
             clock[0] = 60
             FakeTimer.run_due(clock[0])
 
@@ -216,6 +217,33 @@ class CandidatePreviewStoreTest(unittest.TestCase):
             previews.put({"title": "A candidate"})
 
         self.assertEqual(backing_store.candidates, {})
+
+
+class LibraryServerTest(unittest.TestCase):
+    def test_bind_failure_preserves_the_socket_error_and_closes_the_candidate_store(self):
+        candidate_store = mock.Mock()
+        candidate_store.peek.return_value = None
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                listener.listen()
+
+                try:
+                    server.create_server(
+                        "127.0.0.1",
+                        listener.getsockname()[1],
+                        Path(media_root) / "Books",
+                        Path(media_root) / "Audiobooks",
+                        candidate_store=candidate_store,
+                    )
+                except Exception as error:
+                    bind_error = error
+                else:
+                    self.fail("occupied port unexpectedly accepted a second listener")
+
+        self.assertIsInstance(bind_error, OSError)
+        candidate_store.close.assert_called_once_with()
 
 
 class ReadarrStartupConfigurationTest(unittest.TestCase):
@@ -432,6 +460,19 @@ class LibraryBrowserTest(unittest.TestCase):
             [link.attributes["href"] for link in audio_panel[0].descendants("a")],
             ["/library/Audiobooks/"],
         )
+
+    def test_landing_distinguishes_an_unavailable_media_root_from_an_empty_shelf(self):
+        self.books.rename(self.books.with_name("Books unavailable"))
+
+        response, body = self.request("GET", "/library/")
+        books_panel = parse_html(body.decode()).descendants(id="shelf-books-panel")[0]
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(
+            [alert.text_content() for alert in books_panel.descendants(role="alert")],
+            ["The Books shelf cannot be read right now."],
+        )
+        self.assertNotIn("No volumes catalogued yet.", books_panel.text_content())
 
     def test_request_desk_is_the_expanded_shelf_and_works_without_javascript(self):
         response, body = self.request("GET", "/library/request/")
@@ -1041,6 +1082,24 @@ class LibraryBrowserTest(unittest.TestCase):
 
             self.assertIn(response.status, (403, 404))
             self.assertNotIn(b"book content", body)
+
+    def test_symlink_resolution_loops_do_not_terminate_requests(self):
+        for path, expected_status in (
+            ("/library/", 200),
+            ("/library/Books/The%20%3CBook%3E.epub", 403),
+        ):
+            with self.subTest(path=path):
+                with mock.patch.object(
+                    Path, "resolve", side_effect=RuntimeError("Symlink loop")
+                ):
+                    try:
+                        response, _ = self.request("GET", path)
+                    except Exception as error:
+                        result = error
+                    else:
+                        result = response.status
+
+                self.assertEqual(result, expected_status)
 
 
 if __name__ == "__main__":
