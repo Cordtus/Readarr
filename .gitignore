@@ -153,3 +153,21 @@ _temp_*/**/*
 
 # API doc generation
 .config/
+
+# Local contributor and agent tooling
+/AGENTS.md
+/CLAUDE.md
+/GEMINI.md
+/.agents/
+/.codex/
+/.superpowers/
+/.playwright-mcp/
+/docs/superpowers/
+/docs/connectivity-guide
+
+# Local Python/browser artifacts
+__pycache__/
+*.py[cod]
+/live-*.png
+/test-*.png
+/playwright-*.png
