@@ -282,6 +282,7 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
         args = server.parse_args([
             "--books-root", "/plex/Books",
             "--audiobooks-root", "/plex/Audiobooks",
+            "--assets-root", "/srv/library/assets",
             "--readarr-config", "/home/sv/library-browser/readarr-request.json",
         ])
 
@@ -289,6 +290,7 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
             args.readarr_config,
             Path("/home/sv/library-browser/readarr-request.json"),
         )
+        self.assertEqual(args.assets_root, Path("/srv/library/assets"))
         self.assertNotIn("api_key", vars(args))
 
     def test_parse_args_redacts_invalid_argument_values(self):

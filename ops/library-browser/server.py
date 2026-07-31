@@ -173,8 +173,9 @@ def media_entries(media_root, directory=None):
     return children
 
 
-def create_handler(roots, readarr_client=None, candidate_store=None):
+def create_handler(roots, readarr_client=None, candidate_store=None, assets_root=None):
     resolved_roots = {name: Path(root).resolve() for name, root in roots.items()}
+    resolved_assets_root = Path(assets_root).resolve() if assets_root else Path(__file__).with_name("assets").resolve()
     candidate_store = request_candidate_store(candidate_store)
     candidate_lock = threading.Lock()
 
@@ -642,7 +643,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                         self.wfile.write(chunk)
 
         def send_asset(self, send_body):
-            asset = Path(__file__).with_name("assets") / "reading-room.webp"
+            asset = resolved_assets_root / "reading-room.webp"
             try:
                 stat = asset.stat()
             except OSError:
@@ -663,11 +664,11 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
     return LibraryHandler
 
 
-def create_server(host, port, books_root, audiobooks_root, readarr_client=None, candidate_store=None):
+def create_server(host, port, books_root, audiobooks_root, readarr_client=None, candidate_store=None, assets_root=None):
     roots = {"Books": Path(books_root), "Audiobooks": Path(audiobooks_root)}
     candidate_store = request_candidate_store(candidate_store)
     return LibraryServer(
-        (host, port), create_handler(roots, readarr_client, candidate_store), candidate_store
+        (host, port), create_handler(roots, readarr_client, candidate_store, assets_root), candidate_store
     )
 
 
@@ -677,6 +678,7 @@ def parse_args(arguments=None):
     parser.add_argument("--port", type=int, default=8090)
     parser.add_argument("--books-root", required=True)
     parser.add_argument("--audiobooks-root", required=True)
+    parser.add_argument("--assets-root", type=Path)
     parser.add_argument("--readarr-config", type=Path)
     return parser.parse_args(arguments)
 
@@ -715,6 +717,7 @@ def main():
         args.books_root,
         args.audiobooks_root,
         readarr_client=readarr_client,
+        assets_root=args.assets_root,
     )
     print("Readarr Library Browser listening on {}:{}".format(args.host, args.port), flush=True)
     try:
