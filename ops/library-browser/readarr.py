@@ -46,6 +46,22 @@ class Candidate:
     year: Optional[int] = None
 
 
+@dataclass(frozen=True)
+class Release:
+    guid: str
+    indexer_id: int
+    title: str
+    size: int
+    download_allowed: bool
+
+
+@dataclass(frozen=True)
+class ReleaseSelection:
+    release: Release
+    book_id: int
+    book_title: str
+
+
 class CandidateStore:
     def __init__(self, ttl_seconds=300, clock: Callable[[], float] = time.time):
         if ttl_seconds <= 0:
@@ -111,7 +127,7 @@ class ReadarrClient:
             raise ReadarrError("Readarr returned an invalid search response")
         return [self._normalize_candidate(item) for item in response]
 
-    def request(self, candidate):
+    def add(self, candidate):
         if not isinstance(candidate, Candidate):
             raise ReadarrError("invalid request candidate")
         if candidate.is_existing:
@@ -137,10 +153,37 @@ class ReadarrClient:
                 if configuration.monitor == "specificBook":
                     payload["author"]["addOptions"].pop("monitor")
                     payload["author"]["addOptions"]["booksToMonitor"] = [payload["foreignBookId"]]
-            payload["addOptions"] = {"searchForNewBook": True}
+            payload["addOptions"] = {}
             payload["monitored"] = True
             return self._send("POST", "/api/v1/book", payload)
         raise ReadarrError("invalid request candidate")
+
+    def request(self, candidate):
+        """Add a candidate without searching; releases are selected separately."""
+        return self.add(candidate)
+
+    def search_releases(self, book_id):
+        if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
+            raise ReadarrError("invalid Readarr book id")
+        response = self._send("GET", "/api/v1/release?{}".format(
+            urllib.parse.urlencode({"bookId": book_id})
+        ))
+        if not isinstance(response, list):
+            raise ReadarrError("Readarr returned an invalid release response")
+        return [self._normalize_release(item) for item in response]
+
+    def grab_release(self, release, book_id):
+        if not isinstance(release, Release):
+            raise ReadarrError("invalid release selection")
+        if not release.download_allowed:
+            raise ReadarrError("release is not available for download")
+        if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
+            raise ReadarrError("invalid Readarr book id")
+        return self._send("POST", "/api/v1/release", {
+            "guid": release.guid,
+            "indexerId": release.indexer_id,
+            "bookId": book_id,
+        })
 
     def _require_configuration(self):
         if self._configuration is None:
@@ -152,7 +195,6 @@ class ReadarrClient:
         payload = copy.deepcopy(dict(author))
         payload["addOptions"] = {
             "monitor": configuration.monitor,
-            "searchForMissingBooks": True,
         }
         payload["monitored"] = True
         payload["monitorNewItems"] = configuration.monitor_new_items
@@ -160,6 +202,25 @@ class ReadarrClient:
         payload["metadataProfileId"] = configuration.metadata_profile_id
         payload["rootFolderPath"] = configuration.root_folder_path
         return payload
+
+    @staticmethod
+    def _normalize_release(item):
+        if not isinstance(item, Mapping):
+            raise ReadarrError("Readarr returned an invalid release")
+        guid = item.get("guid")
+        indexer_id = item.get("indexerId")
+        title = item.get("title")
+        size = item.get("size", 0)
+        download_allowed = item.get("downloadAllowed")
+        if (
+            not isinstance(guid, str) or not guid
+            or not isinstance(indexer_id, int) or isinstance(indexer_id, bool)
+            or not isinstance(title, str) or not title
+            or not isinstance(size, int) or isinstance(size, bool) or size < 0
+            or not isinstance(download_allowed, bool)
+        ):
+            raise ReadarrError("Readarr returned an invalid release")
+        return Release(guid, indexer_id, title, size, download_allowed)
 
     def _normalize_candidate(self, item):
         if not isinstance(item, Mapping):

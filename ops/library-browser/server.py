@@ -11,7 +11,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from readarr import CandidateStore, ReadarrClient, ReadarrConfiguration, ReadarrError
+from readarr import Candidate, CandidateStore, ReadarrClient, ReadarrConfiguration, ReadarrError, ReleaseSelection
 from templates import (
     catalog,
     landing,
@@ -19,7 +19,9 @@ from templates import (
     request_desk,
     request_error,
     request_results,
+    request_release_results,
     request_success,
+    release_success,
 )
 
 
@@ -187,7 +189,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
 
         def do_POST(self):
             request_path = self.application_path()
-            if request_path != "/request/confirm/":
+            if request_path not in ("/request/confirm/", "/request/release/"):
                 self.send_error(HTTPStatus.NOT_FOUND)
                 return
             if readarr_client is None:
@@ -208,8 +210,38 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
             if token is None:
                 return
             with candidate_lock:
-                candidate = candidate_store.take(token)
-            if candidate is None:
+                selected = candidate_store.take(token)
+            if selected is None:
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Request no longer available",
+                    "This request is no longer available. Search the catalogue again to make a new request.",
+                )
+                return
+            if request_path == "/request/release/":
+                if not isinstance(selected, ReleaseSelection):
+                    self.send_request_error(
+                        HTTPStatus.BAD_REQUEST,
+                        "Release selection unavailable",
+                        "Choose a release from the current search results.",
+                    )
+                    return
+                try:
+                    readarr_client.grab_release(selected.release, selected.book_id)
+                except (ReadarrError, OSError):
+                    self.send_request_error(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        "Release could not be grabbed",
+                        "The selected release cannot be reached right now. Please search again later.",
+                    )
+                    return
+                self.send_html(
+                    release_success(selected, previews=self.shelf_previews()),
+                    send_body=True,
+                )
+                return
+
+            if not isinstance(selected, Candidate):
                 self.send_request_error(
                     HTTPStatus.BAD_REQUEST,
                     "Request no longer available",
@@ -217,7 +249,31 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                 )
                 return
             try:
-                readarr_client.request(candidate)
+                added = readarr_client.add(selected)
+                if selected.kind == "author":
+                    self.send_html(
+                        request_success(selected, previews=self.shelf_previews()),
+                        send_body=True,
+                    )
+                    return
+                book_id = added.get("id") if isinstance(added, dict) else None
+                if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
+                    raise ReadarrError("Readarr did not return the added book id")
+                releases = readarr_client.search_releases(book_id)
+                if not releases:
+                    self.send_request_error(
+                        HTTPStatus.NOT_FOUND,
+                        "No releases found",
+                        "Readarr found no eligible releases for this book. No download was started.",
+                    )
+                    return
+                release_results = []
+                with candidate_lock:
+                    for release in releases:
+                        if not release.download_allowed:
+                            continue
+                        selection = ReleaseSelection(release, book_id, selected.title)
+                        release_results.append((candidate_store.put(selection), selection))
             except (ReadarrError, OSError):
                 self.send_request_error(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -225,8 +281,19 @@ def create_handler(roots, readarr_client=None, candidate_store=None):
                     "The catalogue cannot be reached right now. Please try again later.",
                 )
                 return
+            if not release_results:
+                self.send_request_error(
+                    HTTPStatus.NOT_FOUND,
+                    "No downloadable releases found",
+                    "Readarr found no downloadable releases for this book. No download was started.",
+                )
+                return
             self.send_html(
-                request_success(candidate, previews=self.shelf_previews()),
+                request_release_results(
+                    selected.title,
+                    release_results,
+                    previews=self.shelf_previews(),
+                ),
                 send_body=True,
             )
 

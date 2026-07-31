@@ -473,28 +473,62 @@ def request_results(results, term="", previews=None):
 def request_confirmation(candidate, token, previews=None):
     if candidate.kind == "book":
         author = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
-        action = "This will add this book to Readarr and start an automatic search."
+        action = "This will add this book to Readarr without downloading it. You will choose one release next."
     else:
         author = ""
-        action = "This will add this author to Readarr and start automatic searches for monitored books."
+        action = "This will add this author to Readarr without starting an automatic search."
     request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Confirm request</h2><p class="request-intro"><strong>{}</strong>{}</p><p class="request-intro">{}</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form><p><a class="open-shelf" href="/library/request/">Cancel and search again</a></p></div>'.format(
         escape(candidate.title), author, action, escape(token, quote=True)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Confirm request - The Library of Bex")
 
 
+def _release_size(size):
+    if size < 1024 * 1024:
+        return "{} KB".format(max(1, size // 1024))
+    return "{:.1f} GB".format(size / (1024 * 1024 * 1024)) if size >= 1024 * 1024 * 1024 else "{:.1f} MB".format(size / (1024 * 1024))
+
+
+def request_release_results(book_title, results, previews=None):
+    rows = []
+    for token, selection in results:
+        release = selection.release
+        rows.append(
+            '<article class="request-result"><span class="result-kind">Release</span>'
+            '<h4 class="result-title">{}</h4><p class="result-byline">{} · {}</p>'
+            '<p class="result-explanation">This is an explicit choice for <strong>{}</strong>. Readarr will grab only this release.</p>'
+            '<form class="result-actions" action="/library/request/release/" method="post">'
+            '<input type="hidden" name="token" value="{}">'
+            '<button type="submit">Grab this release</button></form></article>'.format(
+                escape(release.title),
+                escape(_release_size(release.size)),
+                "Indexer {}".format(release.indexer_id),
+                escape(book_title),
+                escape(token, quote=True),
+            )
+        )
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Choose a release</h2><p class="request-intro">Select exactly one release for <strong>{}</strong>. Nothing is downloaded until you choose.</p><section class="catalog-list" aria-label="Available releases">{}</section></div>'.format(escape(book_title), "".join(rows))
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Choose a release - The Library of Bex")
+
+
 def request_success(candidate, previews=None):
     progress = (
-        "Readarr is monitoring the book and searching configured indexers. "
-        "If a matching release is found, the download client will fetch it and Readarr will import it."
+        "The book is now in Readarr without an automatic download."
         if candidate.kind == "book"
         else
-        "Readarr is monitoring the author and searching configured indexers for the selected monitored books."
+        "The author is now monitored in Readarr without an automatic download."
     )
     request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p><p class="request-intro">{}</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a><a class="open-shelf" href="/library/">Return to the library</a></nav></div>'.format(
         escape(candidate.title), progress
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Request received - The Library of Bex")
+
+
+def release_success(selection, previews=None):
+    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Release grabbed</h2><p class="request-message" role="status">Readarr accepted the selected release.</p><p class="request-intro"><strong>{}</strong> was chosen for <strong>{}</strong>. Readarr sent it to the configured download client.</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a><a class="open-shelf" href="/library/">Return to the library</a></nav></div>'.format(
+        escape(selection.release.title), escape(selection.book_title)
+    )
+    return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Release grabbed - The Library of Bex")
 
 
 def request_error(title, message, previews=None):

@@ -103,14 +103,45 @@ class FakeReadarrClient:
         ]
         self.searches = []
         self.requests = []
+        self.adds = []
+        self.release_searches = []
+        self.grabs = []
+        self.releases = [
+            readarr.Release(
+                guid="release-1",
+                indexer_id=7,
+                title="A dangerous title - Unabridged",
+                size=123456789,
+                download_allowed=True,
+            ),
+            readarr.Release(
+                guid="release-2",
+                indexer_id=8,
+                title="A dangerous title - MP3",
+                size=234567890,
+                download_allowed=True,
+            ),
+        ]
 
     def search(self, term):
         self.searches.append(term)
         return self.candidates
 
-    def request(self, candidate):
+    def add(self, candidate):
+        self.adds.append(candidate)
         self.requests.append(candidate)
         return {"id": 1}
+
+    def request(self, candidate):
+        return self.add(candidate)
+
+    def search_releases(self, book_id):
+        self.release_searches.append(book_id)
+        return self.releases
+
+    def grab_release(self, release, book_id):
+        self.grabs.append((release, book_id))
+        return {"guid": release.guid, "indexerId": release.indexer_id}
 
 
 class FakeExpiringCandidateStore:
@@ -630,7 +661,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("Review author", buttons)
         self.assertEqual(self.readarr_client.requests, [])
 
-    def test_confirmation_and_success_explain_the_exact_book_action(self):
+    def test_confirmation_adds_book_without_search_and_shows_release_choices(self):
         token, _ = self.search_for_candidate()
 
         response, body = self.request(
@@ -642,7 +673,7 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertIn(
-            "add this book to Readarr and start an automatic search",
+            "add this book to Readarr without downloading it",
             confirmation_panel.text_content(),
         )
 
@@ -652,21 +683,16 @@ class LibraryBrowserTest(unittest.TestCase):
             urllib.parse.urlencode({"token": token}),
             self.same_origin_headers(),
         )
-        success_panel = parse_html(body.decode()).descendants(
+        release_panel = parse_html(body.decode()).descendants(
             id="shelf-request-panel"
         )[0]
-        destinations = {
-            link.attributes.get("href")
-            for link in success_panel.descendants("a")
-        }
 
         self.assertEqual(response.status, 200)
-        self.assertIn(
-            "Readarr is monitoring the book and searching configured indexers",
-            success_panel.text_content(),
-        )
-        self.assertIn("/library/request/", destinations)
-        self.assertIn("/library/", destinations)
+        self.assertIn("Select exactly one release", release_panel.text_content())
+        self.assertIn("Nothing is downloaded until you choose", release_panel.text_content())
+        self.assertEqual(self.readarr_client.adds, self.readarr_client.candidates)
+        self.assertEqual(self.readarr_client.release_searches, [1])
+        self.assertEqual(self.readarr_client.grabs, [])
 
     def test_author_confirmation_explains_the_broader_monitoring_action(self):
         self.readarr_client.candidates = [
@@ -690,7 +716,7 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertIn(
-            "add this author to Readarr and start automatic searches for monitored books",
+            "add this author to Readarr without starting an automatic search",
             request_panel.text_content(),
         )
         self.assertEqual(self.readarr_client.requests, [])
@@ -746,9 +772,10 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertEqual(len(success_panel), 1)
+        self.assertIn("Nothing is downloaded until you choose", success_panel[0].text_content())
         self.assertEqual(
-            [status.text_content() for status in success_panel[0].descendants(role="status")],
-            ["Readarr accepted your request."],
+            [form.attributes["method"] for form in success_panel[0].descendants("form")],
+            ["post", "post"],
         )
 
         response, body = self.request(
@@ -963,7 +990,7 @@ class LibraryBrowserTest(unittest.TestCase):
             any(timer.started and not timer.cancelled for timer in FakeTimer.timers)
         )
 
-    def test_confirmation_post_requests_candidate_once(self):
+    def test_release_selection_grabs_only_the_selected_release(self):
         token, _ = self.search_for_candidate()
         body = urllib.parse.urlencode({"token": token}).encode()
 
@@ -975,8 +1002,34 @@ class LibraryBrowserTest(unittest.TestCase):
         )
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Readarr accepted your request.", response_body.decode())
-        self.assertEqual(self.readarr_client.requests, self.readarr_client.candidates)
+        release_document = parse_html(response_body.decode())
+        release_tokens = release_document.descendants("input", name="token")
+        self.assertEqual(len(release_tokens), 2)
+        selected_token = release_tokens[1].attributes["value"]
+        self.assertEqual(self.readarr_client.grabs, [])
+
+        response, response_body = self.request(
+            "POST",
+            "/library/request/release/",
+            urllib.parse.urlencode({"token": selected_token}),
+            self.same_origin_headers(),
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertIn("Readarr accepted the selected release.", response_body.decode())
+        self.assertEqual(self.readarr_client.grabs[0][0].guid, "release-2")
+        self.assertEqual(self.readarr_client.grabs[0][1], 1)
+
+        response, response_body = self.request(
+            "POST",
+            "/library/request/release/",
+            urllib.parse.urlencode({"token": selected_token}),
+            self.same_origin_headers(),
+        )
+
+        self.assertEqual(response.status, 400)
+        self.assertIn("no longer available", response_body.decode())
+        self.assertEqual(len(self.readarr_client.grabs), 1)
 
     def test_reused_confirmation_token_cannot_request_again(self):
         token, _ = self.search_for_candidate()

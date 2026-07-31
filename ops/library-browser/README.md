@@ -93,12 +93,15 @@ protected configuration, stop the active supervisor with the same sequence,
 and let cron restart it; do not alter either media root. Caddy, UFW, and
 Fail2ban remain outside this deployment scope.
 
-Search results deliberately separate books from authors. A book request adds
-and searches that specific book. An author request is broader: it adds the
-author and searches the books selected by the configured monitoring policy.
-The confirmation page states which action will occur before its single-use
-POST token is consumed. A success response confirms Readarr acceptance; it
-does not promise that an indexer has a matching release.
+Search results deliberately separate books from authors. A book confirmation
+adds and monitors that specific book without starting an automatic search. The
+desk then shows Readarr's interactive release results, and the user must
+choose one exact release before the server posts its `guid`, `indexerId`, and
+book ID to Readarr. No release is grabbed merely because it was displayed.
+Author confirmation only adds and monitors the author; it does not start a
+search. Every candidate and release choice uses a short-lived, single-use
+server-side token. A success response confirms the specific Readarr action;
+it does not promise that a file has already imported into the library.
 
 ## Responsive bookcase verification
 

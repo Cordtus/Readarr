@@ -142,18 +142,56 @@ class ReadarrClientTest(unittest.TestCase):
             ],
         )
 
-    def test_add_request_preserves_readarr_add_options(self):
+    def test_add_book_does_not_start_automatic_search(self):
         self.responses.append(FakeResponse(201, {"id": 99, "title": "A title"}))
 
-        outcome = self.client.request(self.book_candidate)
+        outcome = self.client.add(self.book_candidate)
 
         self.assertEqual(self.requests[-1]["path"], "/api/v1/book")
-        self.assertTrue(self.requests[-1]["json"]["addOptions"]["searchForNewBook"])
+        self.assertFalse(self.requests[-1]["json"]["addOptions"].get("searchForNewBook", False))
         self.assertTrue(self.requests[-1]["json"]["monitored"])
         self.assertNotIn("rootFolderPath", self.requests[-1]["json"])
         self.assertEqual(outcome, {"id": 99, "title": "A title"})
 
-    def test_book_request_adds_configuration_to_an_unstored_author(self):
+    def test_release_search_normalizes_choices_without_exposing_raw_payload(self):
+        self.responses.append(FakeResponse(200, [{
+            "guid": "mam-guid",
+            "indexerId": 7,
+            "title": "A title - Unabridged",
+            "size": 123456789,
+            "downloadAllowed": True,
+            "downloadUrl": "https://private.example/download",
+        }]))
+
+        releases = self.client.search_releases(99)
+
+        self.assertEqual(self.requests[0]["path"], "/api/v1/release?bookId=99")
+        self.assertEqual(releases[0].guid, "mam-guid")
+        self.assertEqual(releases[0].indexer_id, 7)
+        self.assertEqual(releases[0].title, "A title - Unabridged")
+        self.assertEqual(releases[0].size, 123456789)
+        self.assertTrue(releases[0].download_allowed)
+        self.assertNotIn("downloadUrl", vars(releases[0]))
+
+    def test_grab_release_posts_only_the_selected_release_identity(self):
+        self.responses.append(FakeResponse(200, {"guid": "mam-guid", "indexerId": 7}))
+
+        outcome = self.client.grab_release(readarr.Release(
+            guid="mam-guid",
+            indexer_id=7,
+            title="A title - Unabridged",
+            size=123456789,
+            download_allowed=True,
+        ), book_id=99)
+
+        self.assertEqual(self.requests[0]["path"], "/api/v1/release")
+        self.assertEqual(
+            self.requests[0]["json"],
+            {"guid": "mam-guid", "indexerId": 7, "bookId": 99},
+        )
+        self.assertEqual(outcome, {"guid": "mam-guid", "indexerId": 7})
+
+    def test_book_add_adds_configuration_to_an_unstored_author_without_search(self):
         candidate = readarr.Candidate(
             kind="book",
             foreign_id="book-1",
@@ -177,7 +215,7 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(author["qualityProfileId"], 4)
         self.assertEqual(author["metadataProfileId"], 7)
         self.assertEqual(author["monitorNewItems"], "all")
-        self.assertEqual(author["addOptions"], {"monitor": "all", "searchForMissingBooks": True})
+        self.assertEqual(author["addOptions"], {"monitor": "all"})
 
     def test_specific_book_request_limits_new_author_to_the_requested_book(self):
         client = readarr.ReadarrClient(
@@ -212,10 +250,10 @@ class ReadarrClientTest(unittest.TestCase):
 
         self.assertEqual(
             self.requests[-1]["json"]["author"]["addOptions"],
-            {"searchForMissingBooks": True, "booksToMonitor": ["book-1"]},
+            {"booksToMonitor": ["book-1"]},
         )
 
-    def test_author_request_applies_configuration_and_missing_search(self):
+    def test_author_add_applies_configuration_without_search(self):
         candidate = readarr.Candidate(
             kind="author",
             foreign_id="author-1",
@@ -232,7 +270,7 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(self.requests[-1]["path"], "/api/v1/author")
         self.assertTrue(payload["monitored"])
         self.assertEqual(payload["rootFolderPath"], "/configured/library")
-        self.assertEqual(payload["addOptions"], {"monitor": "all", "searchForMissingBooks": True})
+        self.assertEqual(payload["addOptions"], {"monitor": "all"})
 
     def test_existing_author_request_is_rejected_without_posting(self):
         candidate = readarr.Candidate(
