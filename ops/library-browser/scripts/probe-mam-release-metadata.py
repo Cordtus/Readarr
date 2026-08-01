@@ -19,9 +19,30 @@ from pathlib import Path
 
 CONFIG_PATH = Path("/home/sv/library-browser/readarr-request.json")
 FREELEECH_FIELDS = {"freeleech", "vip", "vipfreeleech"}
+SENSITIVE_FIELD_FRAGMENTS = (
+    "api",
+    "auth",
+    "cookie",
+    "credential",
+    "download",
+    "guid",
+    "hash",
+    "key",
+    "magnet",
+    "passkey",
+    "password",
+    "secret",
+    "title",
+    "token",
+    "uri",
+    "url",
+    "user",
+)
 
 
 def main():
+    if len(sys.argv) != 1:
+        raise ValueError("the probe accepts no command-line arguments")
     book_id = read_book_id()
     config = load_protected_config()
     releases = fetch_releases(config, book_id)
@@ -38,10 +59,10 @@ def main():
 
 
 def read_book_id():
-    value = sys.stdin.readline().strip()
-    if not value.isdecimal() or int(value) <= 0:
-        raise ValueError("supply one positive Readarr book ID on standard input")
-    return int(value)
+    values = sys.stdin.read().split()
+    if len(values) != 1 or not values[0].isdecimal() or int(values[0]) <= 0:
+        raise ValueError("supply exactly one positive Readarr book ID on standard input")
+    return int(values[0])
 
 
 def load_protected_config():
@@ -101,11 +122,7 @@ def json_type(value):
 
 def is_sensitive_field(field):
     field = field.lower()
-    return (
-        field == "title"
-        or field.endswith("url")
-        or any(fragment in field for fragment in ("apikey", "cookie", "guid", "passkey", "token"))
-    )
+    return any(fragment in field for fragment in SENSITIVE_FIELD_FRAGMENTS)
 
 
 if __name__ == "__main__":

@@ -1,10 +1,22 @@
 import json
 import sys
 import unittest
+from contextlib import redirect_stdout
+from importlib.util import module_from_spec, spec_from_file_location
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 import readarr
+
+
+PROBE_SPEC = spec_from_file_location(
+    "probe_mam_release_metadata",
+    Path(__file__).parent / "scripts" / "probe-mam-release-metadata.py",
+)
+probe_mam_release_metadata = module_from_spec(PROBE_SPEC)
+PROBE_SPEC.loader.exec_module(probe_mam_release_metadata)
 
 
 class FakeResponse:
@@ -192,7 +204,7 @@ class ReadarrClientTest(unittest.TestCase):
         self.responses.append(FakeResponse(200, [{
             "guid": "mam-guid",
             "indexerId": 7,
-            "title": "A title - Unabridged",
+            "title": "VIP freeleech edition",
             "size": 123456789,
             "downloadAllowed": True,
         }]))
@@ -365,6 +377,70 @@ class ReadarrClientTest(unittest.TestCase):
             with self.subTest(base_url=base_url):
                 with self.assertRaisesRegex(readarr.ReadarrError, "base URL"):
                     readarr.ReadarrClient(base_url, "not-a-real-key", {"audiobooks": self.configuration})
+
+
+class MamReleaseMetadataProbeTest(unittest.TestCase):
+    def test_probe_accepts_one_positive_stdin_book_id_without_arguments(self):
+        output = StringIO()
+        config = {"url": "https://readarr.example.test", "apiKey": "not-a-real-key"}
+        with (
+            mock.patch.object(probe_mam_release_metadata.sys, "argv", ["probe"]),
+            mock.patch.object(probe_mam_release_metadata.sys, "stdin", StringIO("99\n")),
+            mock.patch.object(probe_mam_release_metadata, "load_protected_config", return_value=config),
+            mock.patch.object(probe_mam_release_metadata, "fetch_releases", return_value=[{"freeleech": True}]) as fetch,
+            redirect_stdout(output),
+        ):
+            result = probe_mam_release_metadata.main()
+
+        self.assertEqual(result, 0)
+        fetch.assert_called_once_with(config, 99)
+        self.assertEqual(
+            json.loads(output.getvalue()),
+            {
+                "hasExplicitFreeleechOrVipBoolean": True,
+                "releaseFieldTypes": {"freeleech": ["boolean"]},
+            },
+        )
+
+    def test_probe_rejects_command_line_arguments(self):
+        config = {"url": "https://readarr.example.test", "apiKey": "not-a-real-key"}
+        with (
+            mock.patch.object(probe_mam_release_metadata.sys, "argv", ["probe", "99"]),
+            mock.patch.object(probe_mam_release_metadata.sys, "stdin", StringIO("99\n")),
+            mock.patch.object(probe_mam_release_metadata, "load_protected_config", return_value=config),
+            mock.patch.object(probe_mam_release_metadata, "fetch_releases", return_value=[{"freeleech": True}]),
+        ):
+            with self.assertRaisesRegex(ValueError, "arguments"):
+                probe_mam_release_metadata.main()
+
+    def test_probe_rejects_multiple_book_ids_from_standard_input(self):
+        config = {"url": "https://readarr.example.test", "apiKey": "not-a-real-key"}
+        with (
+            mock.patch.object(probe_mam_release_metadata.sys, "argv", ["probe"]),
+            mock.patch.object(probe_mam_release_metadata.sys, "stdin", StringIO("99\n100\n")),
+            mock.patch.object(probe_mam_release_metadata, "load_protected_config", return_value=config),
+            mock.patch.object(probe_mam_release_metadata, "fetch_releases", return_value=[{"freeleech": True}]),
+        ):
+            with self.assertRaisesRegex(ValueError, "one positive"):
+                probe_mam_release_metadata.main()
+
+    def test_probe_redacts_sensitive_and_composite_release_field_names(self):
+        field_types = probe_mam_release_metadata.release_field_types([{
+            "freeleech": True,
+            "size": 123,
+            "title": "Private title",
+            "releaseTitle": "Private release title",
+            "guid": "private-guid",
+            "releaseGuid": "private-release-guid",
+            "downloadUrl": "https://private.example/download",
+            "infoUrl": "https://private.example/info",
+            "magnetUri": "magnet:?xt=urn:btih:private",
+            "trackerPasskey": "private-passkey",
+            "apiKey": "private-api-key",
+            "sessionToken": "private-token",
+        }])
+
+        self.assertEqual(field_types, {"freeleech": ["boolean"], "size": ["number"]})
 
 
 if __name__ == "__main__":
