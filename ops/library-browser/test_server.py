@@ -499,11 +499,12 @@ class LibraryBrowserTest(unittest.TestCase):
         request_panel = parse_html(body.decode()).descendants(
             id="shelf-request-panel"
         )[0]
-        scopes = request_panel.descendants("input", name="scope")
+        scopes = request_panel.descendants("select", name="scope")
+        options = scopes[0].descendants("option")
 
         self.assertEqual(response.status, 200)
         self.assertEqual(
-            [(scope.attributes.get("value"), "checked" in scope.attributes) for scope in scopes],
+            [(option.attributes.get("value"), "selected" in option.attributes) for option in options],
             [("audiobooks", True), ("books", False)],
         )
         self.assertIn("Audiobooks", request_panel.text_content())
@@ -675,7 +676,7 @@ class LibraryBrowserTest(unittest.TestCase):
             "section", **{"data-result-kind": "author"}
         )
         refine_inputs = request_panel.descendants("input", name="term")
-        scope_inputs = request_panel.descendants("input", name="scope")
+        scope_selects = request_panel.descendants("select", name="scope")
         buttons = [
             button.text_content()
             for button in request_panel.descendants("button")
@@ -693,12 +694,34 @@ class LibraryBrowserTest(unittest.TestCase):
             ["Pride and Prejudice"],
         )
         self.assertEqual(
-            [input_.attributes.get("value") for input_ in scope_inputs],
-            ["audiobooks"],
+            [
+                [
+                    (option.attributes.get("value"), "selected" in option.attributes)
+                    for option in select.descendants("option")
+                ]
+                for select in scope_selects
+            ],
+            [[("audiobooks", True), ("books", False)]],
         )
-        self.assertIn("Review book", buttons)
+        self.assertIn("Choose audiobook download", buttons)
         self.assertIn("Review author", buttons)
         self.assertEqual(self.readarr_client.requests, [])
+
+    def test_book_results_open_download_choices_directly_and_can_be_closed(self):
+        response, body = self.request("GET", "/request/search/?term=Dangerous%20title")
+        request_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+        book_form = request_panel.descendants("section", **{"data-result-kind": "book"})[0].descendants("form")[0]
+        close_links = [
+            link for link in request_panel.descendants("a")
+            if link.attributes.get("href") == "/library/" and "close-panel" in link.attributes.get("class", "").split()
+        ]
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(book_form.attributes["method"], "post")
+        self.assertEqual(book_form.descendants("button")[0].text_content(), "Choose audiobook download")
+        self.assertEqual(len(close_links), 1)
 
     def test_confirmation_adds_book_without_search_and_shows_release_choices(self):
         token, _ = self.search_for_candidate()
@@ -729,6 +752,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn("Select exactly one release", release_panel.text_content())
         self.assertIn("Nothing is downloaded until you choose", release_panel.text_content())
+        self.assertIn("Download this release", release_panel.text_content())
         self.assertEqual(self.readarr_client.adds, self.readarr_client.candidates)
         self.assertEqual(self.readarr_client.release_searches, [1])
         self.assertEqual(self.readarr_client.grabs, [])
@@ -794,7 +818,7 @@ class LibraryBrowserTest(unittest.TestCase):
             ],
             [
                 ("/library/request/search/", "get"),
-                ("/library/request/confirm/", "get"),
+                ("/library/request/confirm/", "post"),
             ],
         )
 
@@ -848,6 +872,13 @@ class LibraryBrowserTest(unittest.TestCase):
                 "This request is no longer available. Search the catalogue again to make a new request."
             ],
         )
+        for panel in (search_panel[0], confirmation_panel[0], success_panel[0], error_panel[0]):
+            close_links = [
+                link for link in panel.descendants("a")
+                if link.attributes.get("href") == "/library/"
+                and "close-panel" in link.attributes.get("class", "").split()
+            ]
+            self.assertEqual(len(close_links), 1)
 
     def test_existing_search_results_are_marked_without_request_tokens(self):
         candidate_store = FakeCandidateStore()

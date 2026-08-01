@@ -21,10 +21,10 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .request-form label { color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .request-form input { width: 100%; min-height: 44px; padding: .8rem .9rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 16px Georgia, 'Times New Roman', serif; }
 .request-form input:focus { outline: 3px solid rgba(194,148,70,.55); outline-offset: 2px; }
-.request-scope { display: flex; flex-wrap: wrap; gap: .55rem; margin: 0; padding: 0; border: 0; }
-.request-scope legend { width: 100%; color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-.request-scope label { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: .55rem .7rem; color: var(--walnut); background: rgba(255,250,240,.78); border: 1px solid rgba(74,41,29,.45); font-size: .82rem; letter-spacing: 0; text-transform: none; }
-.request-scope input { width: 1.1rem; min-height: auto; padding: 0; accent-color: var(--walnut); }
+.request-scope { display: grid; grid-template-columns: auto minmax(10rem, 1fr); gap: .55rem; align-items: center; }
+.request-scope label { color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.request-scope select { min-width: 0; min-height: 36px; padding: .35rem 2rem .35rem .55rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 16px Georgia, 'Times New Roman', serif; }
+.request-scope select:focus { outline: 3px solid rgba(194,148,70,.55); outline-offset: 2px; }
 .request-form button, .bookcase form button { min-width: 44px; min-height: 44px; justify-self: start; padding: .75rem 1rem; color: #f8e7bd; background: var(--walnut); border: 1px solid var(--brass); border-radius: 0; font: 700 16px/1.2 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; }
 .bookcase form button:active { background: #603625; transform: scale(.985); }
 .request-message { margin: 0 0 1.2rem; padding: .75rem .9rem; color: #5e412c; background: rgba(194,148,70,.14); border-left: 3px solid var(--copper); }
@@ -149,7 +149,9 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   text-underline-offset: .22em;
 }
 .bookcase .request-desk { width: 100%; margin: 0; padding: 0; color: #f7e8c7; background: transparent; border: 0; box-shadow: none; }
+.request-header { display: flex; justify-content: space-between; gap: 1rem; align-items: start; }
 .bookcase .request-desk h2 { margin: 0 0 .65rem; color: #f8e7bd; font: 500 1.55rem/1.05 Georgia, 'Times New Roman', serif; }
+.close-panel { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; color: inherit; border: 1px solid currentColor; font: 700 .72rem/1 Arial, sans-serif; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; }
 .bookcase .request-intro { margin: 0 0 1rem; color: #dec99e; }
 .bookcase .request-form input { min-height: 48px; font-size: 16px; }
 .bookcase .request-form button { min-height: 44px; max-width: 100%; white-space: nowrap; }
@@ -418,9 +420,24 @@ def archives_notice():
     return '<aside class="archives-notice"><strong>The archives</strong><p>The archives are not yet open to the public</p></aside>'
 
 
-def request_form(message=None):
+def request_header(heading, *, focus=False):
+    focus_attributes = ' tabindex="-1" autofocus' if focus else ""
+    return '<div class="request-header"><h2{}>{}</h2><a class="close-panel" href="/library/">Close</a></div>'.format(
+        focus_attributes, escape(heading)
+    )
+
+
+def request_scope_picker(scope):
+    selected = scope if scope in ("audiobooks", "books") else "audiobooks"
+    return '<div class="request-scope"><label for="request-scope">Format</label><select id="request-scope" name="scope"><option value="audiobooks"{}>Audiobooks</option><option value="books"{}>Written books</option></select></div>'.format(
+        " selected" if selected == "audiobooks" else "",
+        " selected" if selected == "books" else "",
+    )
+
+
+def request_form(message=None, scope="audiobooks"):
     message_html = '<p class="request-message" role="status">{}</p>'.format(escape(message)) if message else ""
-    return """<div class="request-desk"><h2>Request a book</h2><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><fieldset class="request-scope"><legend>Format</legend><label><input name="scope" type="radio" value="audiobooks" checked> Audiobooks</label><label><input name="scope" type="radio" value="books"> Written books</label></fieldset><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" enterkeyhint="search" autocomplete="off" required><button type="submit">Search the catalogue</button></form></div>""".format(message_html)
+    return """<div class="request-desk">{}<p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get">{}<label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" enterkeyhint="search" autocomplete="off" required><button type="submit">Search the catalogue</button></form></div>""".format(request_header("Request a book"), message_html, request_scope_picker(scope))
 
 
 def request_desk(message=None, previews=None):
@@ -443,10 +460,14 @@ def request_results(results, term="", scope="audiobooks", previews=None):
                 action = '<p class="request-message" role="status">Already in Readarr</p>'
             else:
                 action = (
-                    '<form class="result-actions" action="/library/request/confirm/" method="get">'
+                    '<form class="result-actions" action="/library/request/confirm/" method="{}">'
                     '<input type="hidden" name="token" value="{}">'
-                    '<button type="submit">Review {}</button></form>'
-                ).format(escape(token, quote=True), kind)
+                    '<button type="submit">{}</button></form>'
+                ).format(
+                    "post" if kind == "book" else "get",
+                    escape(token, quote=True),
+                    "Choose {} download".format("audiobook" if candidate.target == "audiobooks" else "book") if kind == "book" else "Review author",
+                )
             if kind == "book":
                 detail = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
                 if candidate.year:
@@ -484,12 +505,15 @@ def request_results(results, term="", scope="audiobooks", previews=None):
     content = "".join(groups) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
     refine_form = (
         '<form class="request-form refine-search" action="/library/request/search/" method="get">'
-        '<input type="hidden" name="scope" value="{}">'
+        '{}'
         '<label for="request-query">Refine your search</label>'
         '<input id="request-query" name="term" type="search" enterkeyhint="search" '
         'autocomplete="off" required value="{}"><button type="submit">Search again</button></form>'
-    ).format(escape(scope, quote=True), escape(term, quote=True))
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Search results</h2>{}<section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(refine_form, content)
+    ).format(request_scope_picker(scope), escape(term, quote=True))
+    request_content = '<div class="request-desk">{}{}</section></div>'.format(
+        request_header("Search results", focus=True),
+        refine_form + '<section class="catalog-list" aria-label="Request search results">' + content,
+    )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Search results - The Library of Bex")
 
 
@@ -500,8 +524,8 @@ def request_confirmation(candidate, token, previews=None):
     else:
         author = ""
         action = "This will add this author to Readarr without starting an automatic search."
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Confirm request</h2><p class="request-intro"><strong>{}</strong>{}</p><p class="request-intro">{}</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form><p><a class="open-shelf" href="/library/request/">Cancel and search again</a></p></div>'.format(
-        escape(candidate.title), author, action, escape(token, quote=True)
+    request_content = '<div class="request-desk">{}<p class="request-intro"><strong>{}</strong>{}</p><p class="request-intro">{}</p><form class="request-form" action="/library/request/confirm/" method="post"><input type="hidden" name="token" value="{}"><button type="submit">Confirm request</button></form><p><a class="open-shelf" href="/library/request/">Cancel and search again</a></p></div>'.format(
+        request_header("Confirm request", focus=True), escape(candidate.title), author, action, escape(token, quote=True)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Confirm request - The Library of Bex")
 
@@ -522,7 +546,7 @@ def request_release_results(book_title, results, previews=None):
             '<p class="result-explanation">This is an explicit choice for <strong>{}</strong>. Readarr will grab only this release.</p>'
             '<form class="result-actions" action="/library/request/release/" method="post">'
             '<input type="hidden" name="token" value="{}">'
-            '<button type="submit">Grab this release</button></form></article>'.format(
+            '<button type="submit">Download this release</button></form></article>'.format(
                 escape(release.title),
                 escape(_release_size(release.size)),
                 "Indexer {}".format(release.indexer_id),
@@ -530,7 +554,7 @@ def request_release_results(book_title, results, previews=None):
                 escape(token, quote=True),
             )
         )
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Choose a release</h2><p class="request-intro">Select exactly one release for <strong>{}</strong>. Nothing is downloaded until you choose.</p><section class="catalog-list" aria-label="Available releases">{}</section></div>'.format(escape(book_title), "".join(rows))
+    request_content = '<div class="request-desk">{}<p class="request-intro">Select exactly one release for <strong>{}</strong>. Nothing is downloaded until you choose.</p><section class="catalog-list" aria-label="Available releases">{}</section></div>'.format(request_header("Choose a release", focus=True), escape(book_title), "".join(rows))
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Choose a release - The Library of Bex")
 
 
@@ -541,22 +565,22 @@ def request_success(candidate, previews=None):
         else
         "The author is now monitored in Readarr without an automatic download."
     )
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Request received</h2><p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p><p class="request-intro">{}</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a><a class="open-shelf" href="/library/">Return to the library</a></nav></div>'.format(
-        escape(candidate.title), progress
+    request_content = '<div class="request-desk">{}<p class="request-message" role="status">Readarr accepted your request.</p><p class="request-intro"><strong>{}</strong> has been passed to the librarian.</p><p class="request-intro">{}</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a></nav></div>'.format(
+        request_header("Request received", focus=True), escape(candidate.title), progress
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Request received - The Library of Bex")
 
 
 def release_success(selection, previews=None):
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Release grabbed</h2><p class="request-message" role="status">Readarr accepted the selected release.</p><p class="request-intro"><strong>{}</strong> was chosen for <strong>{}</strong>. Readarr sent it to the configured download client.</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a><a class="open-shelf" href="/library/">Return to the library</a></nav></div>'.format(
-        escape(selection.release.title), escape(selection.book_title)
+    request_content = '<div class="request-desk">{}<p class="request-message" role="status">Readarr accepted the selected release.</p><p class="request-intro"><strong>{}</strong> was chosen for <strong>{}</strong>. Readarr sent it to the configured download client.</p><nav class="request-links" aria-label="Request next steps"><a class="open-shelf" href="/library/request/">Request another book</a></nav></div>'.format(
+        request_header("Release grabbed", focus=True), escape(selection.release.title), escape(selection.book_title)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Release grabbed - The Library of Bex")
 
 
 def request_error(title, message, previews=None):
-    request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>{}</h2><p class="request-message" role="alert">{}</p><p><a class="open-shelf" href="/library/request/">Return to the request desk</a></p></div>'.format(
-        escape(title), escape(message)
+    request_content = '<div class="request-desk">{}<p class="request-message" role="alert">{}</p><p><a class="open-shelf" href="/library/request/">Return to the request desk</a></p></div>'.format(
+        request_header(title, focus=True), escape(message)
     )
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="{} - The Library of Bex".format(title))
 
