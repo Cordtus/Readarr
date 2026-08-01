@@ -273,7 +273,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                     for release in releases:
                         if not release.download_allowed:
                             continue
-                        selection = ReleaseSelection(release, book_id, selected.title)
+                        selection = ReleaseSelection(release, book_id, selected.title, selected.target)
                         release_results.append((candidate_store.put(selection), selection))
             except (ReadarrError, OSError):
                 self.send_request_error(
@@ -293,6 +293,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                 request_release_results(
                     selected.title,
                     release_results,
+                    scope=selected.target,
                     previews=self.shelf_previews(),
                 ),
                 send_body=True,

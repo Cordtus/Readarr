@@ -62,6 +62,7 @@ class ReleaseSelection:
     release: Release
     book_id: int
     book_title: str
+    scope: str
 
 
 class CandidateStore:

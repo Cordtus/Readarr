@@ -451,7 +451,7 @@ def request_desk(message=None, previews=None):
 
 def request_results(results, term="", scope="audiobooks", previews=None):
     groups = []
-    for kind, heading in (("book", "Books"), ("author", "Authors")):
+    for kind, heading in (("book", "Title matches"), ("author", "Authors")):
         rows = []
         for token, candidate in results:
             if candidate.kind != kind:
@@ -533,7 +533,7 @@ def _release_size(size):
     return "{:.1f} GB".format(size / (1024 * 1024 * 1024)) if size >= 1024 * 1024 * 1024 else "{:.1f} MB".format(size / (1024 * 1024))
 
 
-def request_release_results(book_title, results, previews=None):
+def request_release_results(book_title, results, scope="audiobooks", previews=None):
     rows = []
     for token, selection in results:
         release = selection.release
@@ -551,7 +551,8 @@ def request_release_results(book_title, results, previews=None):
                 escape(token, quote=True),
             )
         )
-    request_content = '<div class="request-desk">{}<p class="request-intro">Select exactly one release for <strong>{}</strong>. Nothing is downloaded until you choose.</p><section class="catalog-list" aria-label="Available releases">{}</section></div>'.format(request_header("Choose a release", focus=True), escape(book_title), "".join(rows))
+    label = "Audio" if scope == "audiobooks" else "Written"
+    request_content = '<div class="request-desk">{}<p class="request-intro">Select one release for <strong>{}</strong>.</p><section class="catalog-list" aria-label="{} releases">{}</section></div>'.format(request_header(label, focus=True), escape(book_title), label, "".join(rows))
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Choose a release - The Library of Bex")
 
 

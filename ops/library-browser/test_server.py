@@ -684,6 +684,10 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(len(result_groups), 1)
         self.assertEqual(len(author_groups), 1)
+        self.assertEqual(
+            [heading.text_content() for heading in request_panel.descendants("h3")],
+            ["Title matches", "Authors"],
+        )
         self.assertIn("Pride and Prejudice", result_groups[0].text_content())
         self.assertIn("1813", result_groups[0].text_content())
         self.assertIn("Jane Austen", author_groups[0].text_content())
@@ -752,8 +756,8 @@ class LibraryBrowserTest(unittest.TestCase):
         )[0]
 
         self.assertEqual(response.status, 200)
-        self.assertIn("Select exactly one release", release_panel.text_content())
-        self.assertIn("Nothing is downloaded until you choose", release_panel.text_content())
+        self.assertIn("Audio", release_panel.text_content())
+        self.assertIn("Audio", release_panel.text_content())
         self.assertIn("Download this release", release_panel.text_content())
         self.assertEqual(self.readarr_client.adds, self.readarr_client.candidates)
         self.assertEqual(self.readarr_client.release_searches, [1])
@@ -765,7 +769,7 @@ class LibraryBrowserTest(unittest.TestCase):
         )
         token = parse_html(body.decode()).descendants("input", name="token")[0].attributes["value"]
 
-        response, _ = self.request(
+        response, body = self.request(
             "POST",
             "/request/confirm/",
             urllib.parse.urlencode({"token": token}),
@@ -775,6 +779,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(self.readarr_client.searches, [("Dangerous title", "books")])
         self.assertEqual([candidate.target for candidate in self.readarr_client.adds], ["books"])
+        self.assertIn("Written", parse_html(body.decode()).text_content())
 
     def test_author_confirmation_explains_the_broader_monitoring_action(self):
         self.readarr_client.candidates = [
@@ -854,7 +859,7 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertEqual(len(success_panel), 1)
-        self.assertIn("Nothing is downloaded until you choose", success_panel[0].text_content())
+        self.assertIn("Audio", success_panel[0].text_content())
         self.assertEqual(
             [form.attributes["method"] for form in success_panel[0].descendants("form")],
             ["post", "post"],
