@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import json
 import secrets
 import threading
@@ -44,6 +45,7 @@ class Candidate:
     is_existing: bool
     lookup: Mapping[str, Any]
     year: Optional[int] = None
+    target: str = "audiobooks"
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class ReadarrClient:
         self,
         base_url,
         api_key,
-        configuration: Optional[ReadarrConfiguration] = None,
+        configurations: Optional[Mapping[str, ReadarrConfiguration]] = None,
         opener=urllib.request.urlopen,
     ):
         if not isinstance(base_url, str) or not base_url:
@@ -114,25 +116,37 @@ class ReadarrClient:
             raise ReadarrError("Readarr API key must be configured")
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._configuration = configuration
+        if not isinstance(configurations, Mapping) or not configurations:
+            raise ReadarrError("Readarr request targets must be configured")
+        if any(
+            not isinstance(name, str) or not name
+            or not isinstance(configuration, ReadarrConfiguration)
+            for name, configuration in configurations.items()
+        ):
+            raise ReadarrError("Readarr request targets are invalid")
+        self._configurations = dict(configurations)
         self._opener = opener
 
-    def search(self, term):
+    def search(self, term, target):
         if not isinstance(term, str) or not term.strip():
             raise ReadarrError("search term must not be empty")
+        self._require_configuration(target)
         response = self._send("GET", "/api/v1/search?{}".format(
             urllib.parse.urlencode({"term": term})
         ))
         if not isinstance(response, list):
             raise ReadarrError("Readarr returned an invalid search response")
-        return [self._normalize_candidate(item) for item in response]
+        return [
+            dataclasses.replace(self._normalize_candidate(item), target=target)
+            for item in response
+        ]
 
     def add(self, candidate):
         if not isinstance(candidate, Candidate):
             raise ReadarrError("invalid request candidate")
         if candidate.is_existing:
             raise ReadarrError("request candidate already exists")
-        configuration = self._require_configuration()
+        configuration = self._require_configuration(candidate.target)
         if candidate.kind == "author":
             author = candidate.lookup.get("author")
             if not isinstance(author, Mapping):
@@ -185,10 +199,10 @@ class ReadarrClient:
             "bookId": book_id,
         })
 
-    def _require_configuration(self):
-        if self._configuration is None:
-            raise ReadarrError("Readarr request configuration must be configured")
-        return self._configuration
+    def _require_configuration(self, target):
+        if not isinstance(target, str) or target not in self._configurations:
+            raise ReadarrError("Readarr request target must be configured")
+        return self._configurations[target]
 
     @staticmethod
     def _new_author(author, configuration):

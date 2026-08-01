@@ -40,19 +40,33 @@ instance:
 {
   "url": "https://REPLACE_WITH_READARR_URL",
   "apiKey": "REPLACE_WITH_READARR_API_KEY",
-  "rootFolderPath": "REPLACE_WITH_READARR_ROOT_FOLDER_PATH",
-  "qualityProfileId": "REPLACE_WITH_READARR_QUALITY_PROFILE_ID",
-  "metadataProfileId": "REPLACE_WITH_READARR_METADATA_PROFILE_ID",
-  "monitor": "REPLACE_WITH_READARR_MONITOR_VALUE",
-  "monitorNewItems": "REPLACE_WITH_READARR_MONITOR_NEW_ITEMS_VALUE"
+  "targets": {
+    "audiobooks": {
+      "rootFolderPath": "REPLACE_WITH_AUDIOBOOKS_ROOT_FOLDER_PATH",
+      "qualityProfileId": "REPLACE_WITH_AUDIOBOOKS_QUALITY_PROFILE_ID",
+      "metadataProfileId": "REPLACE_WITH_AUDIOBOOKS_METADATA_PROFILE_ID",
+      "monitor": "REPLACE_WITH_AUDIOBOOKS_MONITOR_VALUE",
+      "monitorNewItems": "REPLACE_WITH_AUDIOBOOKS_MONITOR_NEW_ITEMS_VALUE"
+    },
+    "books": {
+      "rootFolderPath": "REPLACE_WITH_BOOKS_ROOT_FOLDER_PATH",
+      "qualityProfileId": "REPLACE_WITH_BOOKS_QUALITY_PROFILE_ID",
+      "metadataProfileId": "REPLACE_WITH_BOOKS_METADATA_PROFILE_ID",
+      "monitor": "REPLACE_WITH_BOOKS_MONITOR_VALUE",
+      "monitorNewItems": "REPLACE_WITH_BOOKS_MONITOR_NEW_ITEMS_VALUE"
+    }
+  }
 }
 ```
 
 Replace every placeholder before starting the watchdog. The template is valid
 JSON, but the quoted profile placeholders must be replaced with the numeric IDs
-returned by Readarr. After authenticated access to Readarr, use the instance's
-root-folder, quality-profile, and metadata-profile listings to copy the actual
-path and IDs; do not guess them. Set the file permissions after placing it:
+returned by Readarr. The two target names are required. Audiobooks is selected
+by default in the request desk; its root and quality profile must therefore be
+the audiobook target. Written books remains an explicit alternate choice.
+After authenticated access to Readarr, use the instance's root-folder,
+quality-profile, and metadata-profile listings to copy the actual path and IDs;
+do not guess them. Set the file permissions after placing it:
 
 ```sh
 chown sv:sv /home/sv/library-browser/readarr-request.json
@@ -93,15 +107,17 @@ protected configuration, stop the active supervisor with the same sequence,
 and let cron restart it; do not alter either media root. Caddy, UFW, and
 Fail2ban remain outside this deployment scope.
 
-Search results deliberately separate books from authors. A book confirmation
-adds and monitors that specific book without starting an automatic search. The
-desk then shows Readarr's interactive release results, and the user must
-choose one exact release before the server posts its `guid`, `indexerId`, and
-book ID to Readarr. No release is grabbed merely because it was displayed.
-Author confirmation only adds and monitors the author; it does not start a
-search. Every candidate and release choice uses a short-lived, single-use
-server-side token. A success response confirms the specific Readarr action;
-it does not promise that a file has already imported into the library.
+Search results deliberately separate books from authors. The desk defaults to
+Audiobooks and carries the chosen target through confirmation. A book
+confirmation adds and monitors that specific book without starting an automatic
+search. Readarr then applies that target's quality profile when returning
+eligible interactive releases, and the user must choose one exact release
+before the server posts its `guid`, `indexerId`, and book ID to Readarr. No
+release is grabbed merely because it was displayed. Author confirmation only
+adds and monitors the author; it does not start a search. Every candidate and
+release choice uses a short-lived, single-use server-side token. A success
+response confirms the specific Readarr action; it does not promise that a file
+has already imported into the library.
 
 ## Responsive bookcase verification
 

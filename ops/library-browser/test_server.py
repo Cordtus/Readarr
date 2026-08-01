@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import dataclasses
 import socket
 import tempfile
 import threading
@@ -19,11 +20,22 @@ import server
 READARR_REQUEST_CONFIG = {
     "url": "https://readarr.example.test",
     "apiKey": "test-readarr-api-key",
-    "rootFolderPath": "/plex/Books",
-    "qualityProfileId": 4,
-    "metadataProfileId": 2,
-    "monitor": "all",
-    "monitorNewItems": "all",
+    "targets": {
+        "audiobooks": {
+            "rootFolderPath": "/plex/Audiobooks",
+            "qualityProfileId": 2,
+            "metadataProfileId": 1,
+            "monitor": "all",
+            "monitorNewItems": "all",
+        },
+        "books": {
+            "rootFolderPath": "/plex/Books",
+            "qualityProfileId": 1,
+            "metadataProfileId": 1,
+            "monitor": "all",
+            "monitorNewItems": "all",
+        },
+    },
 }
 
 
@@ -123,9 +135,12 @@ class FakeReadarrClient:
             ),
         ]
 
-    def search(self, term):
-        self.searches.append(term)
-        return self.candidates
+    def search(self, term, target):
+        self.searches.append((term, target))
+        return [
+            dataclasses.replace(candidate, target=target)
+            for candidate in self.candidates
+        ]
 
     def add(self, candidate):
         self.adds.append(candidate)
@@ -318,11 +333,13 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
         self.assertIsInstance(client, readarr.ReadarrClient)
         self.assertEqual(client._base_url, READARR_REQUEST_CONFIG["url"])
         self.assertEqual(client._api_key, READARR_REQUEST_CONFIG["apiKey"])
-        self.assertEqual(client._configuration.root_folder_path, "/plex/Books")
-        self.assertEqual(client._configuration.quality_profile_id, 4)
-        self.assertEqual(client._configuration.metadata_profile_id, 2)
-        self.assertEqual(client._configuration.monitor, "all")
-        self.assertEqual(client._configuration.monitor_new_items, "all")
+        self.assertEqual(
+            {
+                name: (configuration.root_folder_path, configuration.quality_profile_id)
+                for name, configuration in client._configurations.items()
+            },
+            {"audiobooks": ("/plex/Audiobooks", 2), "books": ("/plex/Books", 1)},
+        )
 
     def test_missing_configuration_leaves_the_request_desk_unavailable(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -353,10 +370,10 @@ class BlockingReadarrClient(FakeReadarrClient):
         self.search_started = threading.Event()
         self.release_search = threading.Event()
 
-    def search(self, term):
+    def search(self, term, target):
         self.search_started.set()
         self.release_search.wait(5)
-        return super().search(term)
+        return super().search(term, target)
 
 
 class LibraryBrowserTest(unittest.TestCase):
@@ -477,6 +494,21 @@ class LibraryBrowserTest(unittest.TestCase):
             [("/library/request/search/", "get")],
         )
 
+    def test_request_desk_defaults_searches_to_audiobooks_but_offers_written_books(self):
+        response, body = self.request("GET", "/request/")
+        request_panel = parse_html(body.decode()).descendants(
+            id="shelf-request-panel"
+        )[0]
+        scopes = request_panel.descendants("input", name="scope")
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(
+            [(scope.attributes.get("value"), "checked" in scope.attributes) for scope in scopes],
+            [("audiobooks", True), ("books", False)],
+        )
+        self.assertIn("Audiobooks", request_panel.text_content())
+        self.assertIn("Written books", request_panel.text_content())
+
     def test_landing_previews_recent_safe_entries_and_an_empty_shelf(self):
         older = self.books / "Older.epub"
         newest = self.books / "Newest.epub"
@@ -596,7 +628,7 @@ class LibraryBrowserTest(unittest.TestCase):
         request_panel = document.descendants(id="shelf-request-panel")[0]
 
         self.assertTrue(token)
-        self.assertEqual(self.readarr_client.searches, ["Dangerous title"])
+        self.assertEqual(self.readarr_client.searches, [("Dangerous title", "audiobooks")])
         self.assertEqual(self.readarr_client.requests, [])
         self.assertEqual(
             [
@@ -643,6 +675,7 @@ class LibraryBrowserTest(unittest.TestCase):
             "section", **{"data-result-kind": "author"}
         )
         refine_inputs = request_panel.descendants("input", name="term")
+        scope_inputs = request_panel.descendants("input", name="scope")
         buttons = [
             button.text_content()
             for button in request_panel.descendants("button")
@@ -658,6 +691,10 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(
             [input_.attributes.get("value") for input_ in refine_inputs],
             ["Pride and Prejudice"],
+        )
+        self.assertEqual(
+            [input_.attributes.get("value") for input_ in scope_inputs],
+            ["audiobooks"],
         )
         self.assertIn("Review book", buttons)
         self.assertIn("Review author", buttons)
@@ -695,6 +732,23 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(self.readarr_client.adds, self.readarr_client.candidates)
         self.assertEqual(self.readarr_client.release_searches, [1])
         self.assertEqual(self.readarr_client.grabs, [])
+
+    def test_written_book_scope_is_preserved_through_confirmation(self):
+        response, body = self.request(
+            "GET", "/request/search/?term=Dangerous%20title&scope=books"
+        )
+        token = parse_html(body.decode()).descendants("input", name="token")[0].attributes["value"]
+
+        response, _ = self.request(
+            "POST",
+            "/request/confirm/",
+            urllib.parse.urlencode({"token": token}),
+            self.same_origin_headers(),
+        )
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(self.readarr_client.searches, [("Dangerous title", "books")])
+        self.assertEqual([candidate.target for candidate in self.readarr_client.adds], ["books"])
 
     def test_author_confirmation_explains_the_broader_monitoring_action(self):
         self.readarr_client.candidates = [

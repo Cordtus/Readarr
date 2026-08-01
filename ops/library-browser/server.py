@@ -354,6 +354,9 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
             terms = urllib.parse.parse_qs(
                 urllib.parse.urlsplit(self.path).query, keep_blank_values=True
             ).get("term", [])
+            scopes = urllib.parse.parse_qs(
+                urllib.parse.urlsplit(self.path).query, keep_blank_values=True
+            ).get("scope", ["audiobooks"])
             if len(terms) != 1:
                 self.send_request_error(
                     HTTPStatus.BAD_REQUEST,
@@ -363,6 +366,14 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                 )
                 return
             term = terms[0].strip()
+            if len(scopes) != 1 or scopes[0] not in ("audiobooks", "books"):
+                self.send_request_error(
+                    HTTPStatus.BAD_REQUEST,
+                    "Choose a format",
+                    "Choose Audiobooks or Written books before searching.",
+                    send_body,
+                )
+                return
             if not 2 <= len(term) <= 200:
                 self.send_request_error(
                     HTTPStatus.BAD_REQUEST,
@@ -372,7 +383,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                 )
                 return
             try:
-                candidates = readarr_client.search(term)
+                candidates = readarr_client.search(term, scopes[0])
             except (ReadarrError, OSError):
                 self.send_request_error(
                     HTTPStatus.SERVICE_UNAVAILABLE,
@@ -401,6 +412,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                 request_results(
                     results,
                     term=term,
+                    scope=scopes[0],
                     previews=self.shelf_previews(),
                 ),
                 send_body,
@@ -695,14 +707,20 @@ def load_readarr_client(config_path, log=print):
     try:
         if not isinstance(values, dict):
             raise ReadarrError("Readarr configuration must be a JSON object")
-        configuration = ReadarrConfiguration(
-            root_folder_path=values["rootFolderPath"],
-            quality_profile_id=values["qualityProfileId"],
-            metadata_profile_id=values["metadataProfileId"],
-            monitor=values["monitor"],
-            monitor_new_items=values["monitorNewItems"],
-        )
-        return ReadarrClient(values["url"], values["apiKey"], configuration)
+        targets = values["targets"]
+        if not isinstance(targets, dict) or set(targets) != {"audiobooks", "books"}:
+            raise ReadarrError("Readarr request targets are invalid")
+        configurations = {
+            name: ReadarrConfiguration(
+                root_folder_path=target["rootFolderPath"],
+                quality_profile_id=target["qualityProfileId"],
+                metadata_profile_id=target["metadataProfileId"],
+                monitor=target["monitor"],
+                monitor_new_items=target["monitorNewItems"],
+            )
+            for name, target in targets.items()
+        }
+        return ReadarrClient(values["url"], values["apiKey"], configurations)
     except (KeyError, TypeError, ValueError, ReadarrError):
         log("Readarr request desk unavailable: configuration is invalid")
         return None

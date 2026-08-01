@@ -60,7 +60,7 @@ class ReadarrClientTest(unittest.TestCase):
         self.client = readarr.ReadarrClient(
             "http://readarr:8787",
             "not-a-real-key",
-            configuration=self.configuration,
+            configurations={"audiobooks": self.configuration, "books": self.configuration},
             opener=self.opener,
         )
         self.book_candidate = readarr.Candidate(
@@ -101,7 +101,7 @@ class ReadarrClientTest(unittest.TestCase):
             },
         }]))
 
-        candidates = self.client.search("A title")
+        candidates = self.client.search("A title", "audiobooks")
 
         self.assertEqual(self.requests[0]["path"], "/api/v1/search?term=A+title")
         self.assertEqual(self.requests[0]["headers"]["X-Api-Key"], "not-a-real-key")
@@ -111,6 +111,7 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertEqual(candidates[0].foreign_id, "book-1")
         self.assertEqual(candidates[0].year, 1813)
         self.assertFalse(candidates[0].is_existing)
+        self.assertEqual(candidates[0].target, "audiobooks")
 
     def test_search_keeps_book_and_author_results_distinct(self):
         self.responses.append(FakeResponse(200, [
@@ -132,7 +133,7 @@ class ReadarrClientTest(unittest.TestCase):
             },
         ]))
 
-        candidates = self.client.search("Pride and Prejudice")
+        candidates = self.client.search("Pride and Prejudice", "books")
 
         self.assertEqual(
             [(candidate.kind, candidate.title, candidate.year) for candidate in candidates],
@@ -221,13 +222,13 @@ class ReadarrClientTest(unittest.TestCase):
         client = readarr.ReadarrClient(
             "http://readarr:8787",
             "not-a-real-key",
-            configuration=readarr.ReadarrConfiguration(
+            configurations={"audiobooks": readarr.ReadarrConfiguration(
                 root_folder_path="/configured/library",
                 quality_profile_id=4,
                 metadata_profile_id=7,
                 monitor="specificBook",
                 monitor_new_items="all",
-            ),
+            )},
             opener=self.opener,
         )
         candidate = readarr.Candidate(
@@ -315,7 +316,7 @@ class ReadarrClientTest(unittest.TestCase):
 
         self.responses.append(FakeResponse(500, {"message": "backend failed"}))
         with self.assertRaises(readarr.ReadarrError) as raised:
-            self.client.search("A title")
+            self.client.search("A title", "audiobooks")
 
         self.assertNotIn("not-a-real-key", str(raised.exception))
 
@@ -323,7 +324,7 @@ class ReadarrClientTest(unittest.TestCase):
         for base_url in (None, 1, "", "http://readarr:8787?setting=value", "http://readarr:8787#fragment"):
             with self.subTest(base_url=base_url):
                 with self.assertRaisesRegex(readarr.ReadarrError, "base URL"):
-                    readarr.ReadarrClient(base_url, "not-a-real-key")
+                    readarr.ReadarrClient(base_url, "not-a-real-key", {"audiobooks": self.configuration})
 
 
 if __name__ == "__main__":

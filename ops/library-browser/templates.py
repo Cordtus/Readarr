@@ -21,6 +21,10 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .request-form label { color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .request-form input { width: 100%; min-height: 44px; padding: .8rem .9rem; color: var(--ink); background: #fffaf0; border: 1px solid rgba(74,41,29,.55); border-radius: 0; font: 16px Georgia, 'Times New Roman', serif; }
 .request-form input:focus { outline: 3px solid rgba(194,148,70,.55); outline-offset: 2px; }
+.request-scope { display: flex; flex-wrap: wrap; gap: .55rem; margin: 0; padding: 0; border: 0; }
+.request-scope legend { width: 100%; color: var(--walnut); font: .76rem Arial, sans-serif; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.request-scope label { display: flex; align-items: center; gap: .45rem; min-height: 44px; padding: .55rem .7rem; color: var(--walnut); background: rgba(255,250,240,.78); border: 1px solid rgba(74,41,29,.45); font-size: .82rem; letter-spacing: 0; text-transform: none; }
+.request-scope input { width: 1.1rem; min-height: auto; padding: 0; accent-color: var(--walnut); }
 .request-form button, .bookcase form button { min-width: 44px; min-height: 44px; justify-self: start; padding: .75rem 1rem; color: #f8e7bd; background: var(--walnut); border: 1px solid var(--brass); border-radius: 0; font: 700 16px/1.2 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; touch-action: manipulation; }
 .bookcase form button:active { background: #603625; transform: scale(.985); }
 .request-message { margin: 0 0 1.2rem; padding: .75rem .9rem; color: #5e412c; background: rgba(194,148,70,.14); border-left: 3px solid var(--copper); }
@@ -416,7 +420,7 @@ def archives_notice():
 
 def request_form(message=None):
     message_html = '<p class="request-message" role="status">{}</p>'.format(escape(message)) if message else ""
-    return """<div class="request-desk"><h2>Request a book</h2><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" enterkeyhint="search" autocomplete="off" required><button type="submit">Search the catalogue</button></form></div>""".format(message_html)
+    return """<div class="request-desk"><h2>Request a book</h2><p class="request-intro">Tell the librarian what you would like to read, and the catalogue will be searched for a suitable edition.</p>{}<form class="request-form" action="/library/request/search/" method="get"><fieldset class="request-scope"><legend>Format</legend><label><input name="scope" type="radio" value="audiobooks" checked> Audiobooks</label><label><input name="scope" type="radio" value="books"> Written books</label></fieldset><label for="request-query">Title, author, or ISBN</label><input id="request-query" name="term" type="search" enterkeyhint="search" autocomplete="off" required><button type="submit">Search the catalogue</button></form></div>""".format(message_html)
 
 
 def request_desk(message=None, previews=None):
@@ -428,7 +432,7 @@ def request_desk(message=None, previews=None):
     )
 
 
-def request_results(results, term="", previews=None):
+def request_results(results, term="", scope="audiobooks", previews=None):
     groups = []
     for kind, heading in (("book", "Books"), ("author", "Authors")):
         rows = []
@@ -480,10 +484,11 @@ def request_results(results, term="", previews=None):
     content = "".join(groups) or '<p class="empty">No suitable editions were found. Try another title, author, or ISBN.</p>'
     refine_form = (
         '<form class="request-form refine-search" action="/library/request/search/" method="get">'
+        '<input type="hidden" name="scope" value="{}">'
         '<label for="request-query">Refine your search</label>'
         '<input id="request-query" name="term" type="search" enterkeyhint="search" '
         'autocomplete="off" required value="{}"><button type="submit">Search again</button></form>'
-    ).format(escape(term, quote=True))
+    ).format(escape(scope, quote=True), escape(term, quote=True))
     request_content = '<div class="request-desk"><h2 tabindex="-1" autofocus>Search results</h2>{}<section class="catalog-list" aria-label="Request search results">{}</section></div>'.format(refine_form, content)
     return library_shell(previews or (), active_shelf="request", request_content=request_content, title="Search results - The Library of Bex")
 
