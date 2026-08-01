@@ -164,6 +164,7 @@ _temp_*/**/*
 /.playwright-mcp/
 /docs/superpowers/
 /docs/connectivity-guide
+/docs/api-snips/
 
 # Local Python/browser artifacts
 __pycache__/
