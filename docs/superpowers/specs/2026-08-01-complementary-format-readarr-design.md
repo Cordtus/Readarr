@@ -62,9 +62,11 @@ displayed.
 MAM VIP eligibility is an indexer and tracker concern. If the authenticated
 MAM indexer returns a VIP-marked release, it is treated like any other
 eligible interactive release and is still subject to the reader's explicit
-selection. VIP-only releases are permanently freeleech for a VIP member: the
-release screen must identify that ratio benefit, but it must not imply that
-the torrent can stop seeding. The request desk must not reintroduce an
+selection. A VIP-only release is freeleech only while the account currently
+has VIP status: the release screen must identify that current ratio benefit,
+but must not present it as permanent or imply that the torrent can stop
+seeding. If VIP expires, a later grab of the same release is not freeleech
+unless the account is VIP again. The request desk must not reintroduce an
 MAM-only filter or infer eligibility from release titles.
 
 Freeleech wedges are consumable tracker-side rewards for individual torrents;
@@ -97,7 +99,7 @@ must use the intended target and leave the existing target untouched. Live
 acceptance will verify the container's mount/network/service state, both
 catalogue roots, Readarr's imported file, the shelf entry, and Plex's Music
 library visibility for Audio imports. A VIP-visible MAM release must display
-its permanent-freeleech status and remain selectable through the normal
+its current VIP-freeleech status and remain selectable through the normal
 release screen. Freeleech-wedge tests must prove the displayed torrent
 identity, exact effect, and required explicit confirmation; they must not
 exercise a live tracker transaction. No implementation may silently spend
