@@ -72,7 +72,7 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   text-shadow: 0 2px 3px rgba(18,8,5,.95), 0 0 1.2rem rgba(18,8,5,.85);
 }
 .bookcase .plaque h1 { font-size: clamp(2rem, 7vw, 3.25rem); line-height: .92; }
-.bookcase .shelves { display: block; }
+.bookcase .shelves { position: relative; display: block; }
 .shelf-tabs {
   display: none;
   width: 56px;
@@ -83,6 +83,14 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
 .shelf-panels {
   margin-top: .5rem;
   box-shadow: 0 .65rem 1.4rem rgba(0,0,0,.24);
+}
+.js .shelf-panels {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: calc(56px + .6rem);
+  width: min(22rem, calc(100vw - 8rem));
+  margin: 0;
 }
 .shelf-trigger {
   width: 56px;
@@ -116,6 +124,11 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
   border: 1px solid rgba(235,190,105,.42);
   border-top: 0;
   font: .9rem/1.45 Arial, sans-serif;
+}
+.js .shelf-panel {
+  max-height: min(54dvh, 32rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .shelf-panel + .shelf-panel { border-top: 1px solid rgba(235,190,105,.28); }
 .shelf-panel ul { margin: 0 0 .85rem; padding: 0; list-style: none; }
@@ -180,6 +193,11 @@ a:focus-visible { outline: 3px solid #f8d27c; outline-offset: 4px; border-radius
     border: 1px solid rgba(194,148,70,.5);
     box-shadow: inset 0 0 2rem rgba(115,72,38,.08);
     font-family: Georgia, 'Times New Roman', serif;
+  }
+  .js .shelf-panels {
+    top: calc(56px + .5rem);
+    left: 0;
+    width: 100%;
   }
   .bookcase .request-desk h2,
   .bookcase .result-title { color: var(--walnut); }

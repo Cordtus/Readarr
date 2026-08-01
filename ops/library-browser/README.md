@@ -108,8 +108,10 @@ it does not promise that a file has already imported into the library.
 The landing page and every request state share the same reading-room shell.
 There is no outer cabinet surface: the identity sits directly over the room,
 and Books, Audiobooks, and Request form one horizontal mobile-first shelf row.
-The landing starts fully collapsed; tapping a shelf opens its full-width panel,
-and pointer hover previews it on hover-capable devices. Routed request states
+The landing starts fully collapsed; tapping a shelf opens an overlay panel,
+and pointer hover previews it on hover-capable devices. With JavaScript, the
+overlay scrolls its own long content over the room while the page itself,
+title, shelf controls, and archives notice stay fixed. Routed request states
 open Request automatically. Without JavaScript, all panels remain in document
 flow so catalog links and request forms still work.
 Books and Audiobooks previews use the same root-bound filtering as their
@@ -123,6 +125,10 @@ landscape. Confirm:
 - the page has no horizontal overflow at 100% and 200% zoom;
 - safe-area padding protects content at the viewport edges;
 - touch opens one shelf at a time, while keyboard focus and activation work;
+- opening each shelf leaves the title, all three controls, and archives notice
+  in place, without making the landing taller than the viewport;
+- long shelf content scrolls within its overlay rather than scrolling or
+  resizing the background page;
 - reduced-motion mode makes shelf changes immediate.
 
 A late-model physical iPhone Safari pass remains the final hardware acceptance
