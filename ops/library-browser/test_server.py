@@ -507,8 +507,7 @@ class LibraryBrowserTest(unittest.TestCase):
             [(option.attributes.get("value"), "selected" in option.attributes) for option in options],
             [("audiobooks", True), ("books", False)],
         )
-        self.assertIn("Audiobooks", request_panel.text_content())
-        self.assertIn("Written books", request_panel.text_content())
+        self.assertEqual([option.text_content() for option in options], ["Audio", "Written"])
 
     def test_landing_previews_recent_safe_entries_and_an_empty_shelf(self):
         older = self.books / "Older.epub"
@@ -703,8 +702,11 @@ class LibraryBrowserTest(unittest.TestCase):
             ],
             [[("audiobooks", True), ("books", False)]],
         )
-        self.assertIn("Choose audiobook download", buttons)
-        self.assertIn("Review author", buttons)
+        self.assertIn("Check Out", buttons)
+        self.assertIn("Follow Author", buttons)
+        self.assertIn("Search", buttons)
+        self.assertNotIn("Search again", buttons)
+        self.assertNotIn("Requests this specific book.", request_panel.text_content())
         self.assertEqual(self.readarr_client.requests, [])
 
     def test_book_results_open_download_choices_directly_and_can_be_closed(self):
@@ -720,7 +722,7 @@ class LibraryBrowserTest(unittest.TestCase):
 
         self.assertEqual(response.status, 200)
         self.assertEqual(book_form.attributes["method"], "post")
-        self.assertEqual(book_form.descendants("button")[0].text_content(), "Choose audiobook download")
+        self.assertEqual(book_form.descendants("button")[0].text_content(), "Check Out")
         self.assertEqual(len(close_links), 1)
 
     def test_confirmation_adds_book_without_search_and_shows_release_choices(self):

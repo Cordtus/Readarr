@@ -429,7 +429,7 @@ def request_header(heading, *, focus=False):
 
 def request_scope_picker(scope):
     selected = scope if scope in ("audiobooks", "books") else "audiobooks"
-    return '<div class="request-scope"><label for="request-scope">Format</label><select id="request-scope" name="scope"><option value="audiobooks"{}>Audiobooks</option><option value="books"{}>Written books</option></select></div>'.format(
+    return '<div class="request-scope"><label for="request-scope">Format</label><select id="request-scope" name="scope"><option value="audiobooks"{}>Audio</option><option value="books"{}>Written</option></select></div>'.format(
         " selected" if selected == "audiobooks" else "",
         " selected" if selected == "books" else "",
     )
@@ -466,17 +466,13 @@ def request_results(results, term="", scope="audiobooks", previews=None):
                 ).format(
                     "post" if kind == "book" else "get",
                     escape(token, quote=True),
-                    "Choose {} download".format("audiobook" if candidate.target == "audiobooks" else "book") if kind == "book" else "Review author",
+                    "Check Out" if kind == "book" else "Follow Author",
                 )
             if kind == "book":
                 detail = " by {}".format(escape(candidate.author_name)) if candidate.author_name else ""
                 if candidate.year:
                     detail += " · {}".format(candidate.year)
-                explanation = (
-                    "This book is already in Readarr."
-                    if candidate.is_existing
-                    else "Requests this specific book."
-                )
+                explanation = "This book is already in Readarr." if candidate.is_existing else ""
             else:
                 detail = ""
                 explanation = (
@@ -484,14 +480,15 @@ def request_results(results, term="", scope="audiobooks", previews=None):
                     if candidate.is_existing
                     else "This adds the author and searches monitored books."
                 )
+            explanation_html = '<p class="result-explanation">{}</p>'.format(escape(explanation)) if explanation else ""
             rows.append(
                 '<article class="request-result"><span class="result-kind">{}</span>'
                 '<h4 class="result-title">{}</h4><p class="result-byline">{}</p>'
-                '<p class="result-explanation">{}</p>{}</article>'.format(
+                '{}{}</article>'.format(
                     "Book" if kind == "book" else "Author",
                     escape(candidate.title),
                     detail,
-                    explanation,
+                    explanation_html,
                     action,
                 )
             )
@@ -508,7 +505,7 @@ def request_results(results, term="", scope="audiobooks", previews=None):
         '{}'
         '<label for="request-query">Refine your search</label>'
         '<input id="request-query" name="term" type="search" enterkeyhint="search" '
-        'autocomplete="off" required value="{}"><button type="submit">Search again</button></form>'
+        'autocomplete="off" required value="{}"><button type="submit">Search</button></form>'
     ).format(request_scope_picker(scope), escape(term, quote=True))
     request_content = '<div class="request-desk">{}{}</section></div>'.format(
         request_header("Search results", focus=True),
