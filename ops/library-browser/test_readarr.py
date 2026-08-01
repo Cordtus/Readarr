@@ -105,7 +105,7 @@ class ReadarrClientTest(unittest.TestCase):
 
         self.assertEqual(self.requests[0]["path"], "/api/v1/search?term=A+title")
         self.assertEqual(self.requests[0]["headers"]["X-Api-Key"], "not-a-real-key")
-        self.assertEqual(self.requests[0]["timeout"], 10)
+        self.assertEqual(self.requests[0]["timeout"], 60)
         self.assertEqual(candidates[0].title, "A title")
         self.assertEqual(candidates[0].author_name, "An author")
         self.assertEqual(candidates[0].foreign_id, "book-1")

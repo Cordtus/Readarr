@@ -298,7 +298,7 @@ class ReadarrClient:
             method=method,
         )
         try:
-            with self._opener(request, timeout=10) as response:
+            with self._opener(request, timeout=60) as response:
                 status = getattr(response, "status", response.getcode())
                 response_body = response.read()
         except urllib.error.HTTPError as error:
