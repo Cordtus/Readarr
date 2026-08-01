@@ -62,16 +62,26 @@ displayed.
 MAM VIP eligibility is an indexer and tracker concern. If the authenticated
 MAM indexer returns a VIP-marked release, it is treated like any other
 eligible interactive release and is still subject to the reader's explicit
-selection. The request desk must not reintroduce an MAM-only filter or infer
-eligibility from release titles.
+selection. VIP-only releases are permanently freeleech for a VIP member: the
+release screen must identify that ratio benefit, but it must not imply that
+the torrent can stop seeding. The request desk must not reintroduce an
+MAM-only filter or infer eligibility from release titles.
 
 Freeleech wedges are consumable tracker-side rewards for individual torrents;
 bonus points can also be used for upload credit, VIP status, seedtime fixes,
-and torrent-ratio changes. The library-browser and either Readarr instance
-must not buy, spend, apply, or schedule any of these. They do not have a
-safe, confirmed tracker transaction contract in this project, and an
-automatic action could spend points or change an obligation without a
-reader's explicit tracker confirmation.
+and torrent-ratio changes. Point spending is permitted only as a
+reader-initiated tracker operation with an exact-torrent preview and an
+explicit confirmation immediately before the transaction. The preview must
+state the operation, the MAM torrent identity, the point or wedge cost, and
+the effect on download accounting. It must never use an inferred title match,
+silently choose a release, queue a future spend, or spend a wedge on an
+already-freeleech VIP release.
+
+The first delivery is limited to a confirmed Freeleech-wedge action when the
+tracker provides a documented, authenticated operation that can be tied to
+the selected release. Upload credit, VIP renewal, seedtime fixes, and
+torrent-ratio changes remain tracker-only until each has its own confirmed
+operation, preview, and explicit confirmation design.
 
 The download client remains responsible for keeping successfully grabbed
 torrents available to seed. The integration must not auto-remove completed
@@ -86,7 +96,10 @@ one-target-unavailable search results; selecting the complementary action
 must use the intended target and leave the existing target untouched. Live
 acceptance will verify the container's mount/network/service state, both
 catalogue roots, Readarr's imported file, the shelf entry, and Plex's Music
-library visibility for Audio imports. A VIP-visible MAM release remains
-selectable through the normal release screen; no test or implementation may
-simulate tracker point spending, freeleech application, ratio changes, or
-seedtime fixes.
+library visibility for Audio imports. A VIP-visible MAM release must display
+its permanent-freeleech status and remain selectable through the normal
+release screen. Freeleech-wedge tests must prove the displayed torrent
+identity, exact effect, and required explicit confirmation; they must not
+exercise a live tracker transaction. No implementation may silently spend
+points or wedges, schedule a spend, auto-select a release, or alter seedtime
+or ratio settings.
