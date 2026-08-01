@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report whether Readarr exposes explicit freeleech/VIP release metadata.
+"""Report whether Readarr exposes explicit generic freeleech release metadata.
 
 This probe is read-only. It loads the protected local request-desk
 configuration, accepts one existing Readarr book ID on standard input, and
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 CONFIG_PATH = Path("/home/sv/library-browser/readarr-request.json")
-FREELEECH_FIELDS = {"freeleech", "vip", "vipfreeleech"}
+FREELEECH_FIELD = "freeleech"
 SENSITIVE_FIELD_FRAGMENTS = (
     "api",
     "auth",
@@ -47,13 +47,13 @@ def main():
     config = load_protected_config()
     releases = fetch_releases(config, book_id)
     field_types = release_field_types(releases)
-    has_explicit_metadata = any(
-        field.lower() in FREELEECH_FIELDS and "boolean" in types
-        for field, types in field_types.items()
-    )
+    freeleech_field_types = {
+        FREELEECH_FIELD: field_types[FREELEECH_FIELD],
+    } if FREELEECH_FIELD in field_types else {}
+    has_explicit_metadata = "boolean" in freeleech_field_types.get(FREELEECH_FIELD, [])
     print(json.dumps({
-        "releaseFieldTypes": field_types,
-        "hasExplicitFreeleechOrVipBoolean": has_explicit_metadata,
+        "freeleechFieldTypes": freeleech_field_types,
+        "hasExplicitFreeleechBoolean": has_explicit_metadata,
     }, sort_keys=True))
     return 0 if has_explicit_metadata else 3
 

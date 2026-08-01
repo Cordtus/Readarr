@@ -397,8 +397,33 @@ class MamReleaseMetadataProbeTest(unittest.TestCase):
         self.assertEqual(
             json.loads(output.getvalue()),
             {
-                "hasExplicitFreeleechOrVipBoolean": True,
-                "releaseFieldTypes": {"freeleech": ["boolean"]},
+                "freeleechFieldTypes": {"freeleech": ["boolean"]},
+                "hasExplicitFreeleechBoolean": True,
+            },
+        )
+
+    def test_probe_does_not_treat_vip_metadata_as_current_vip_entitlement(self):
+        output = StringIO()
+        config = {"url": "https://readarr.example.test", "apiKey": "not-a-real-key"}
+        with (
+            mock.patch.object(probe_mam_release_metadata.sys, "argv", ["probe"]),
+            mock.patch.object(probe_mam_release_metadata.sys, "stdin", StringIO("99\n")),
+            mock.patch.object(probe_mam_release_metadata, "load_protected_config", return_value=config),
+            mock.patch.object(
+                probe_mam_release_metadata,
+                "fetch_releases",
+                return_value=[{"vip": True, "vipFreeleech": True}],
+            ),
+            redirect_stdout(output),
+        ):
+            result = probe_mam_release_metadata.main()
+
+        self.assertEqual(result, 3)
+        self.assertEqual(
+            json.loads(output.getvalue()),
+            {
+                "freeleechFieldTypes": {},
+                "hasExplicitFreeleechBoolean": False,
             },
         )
 

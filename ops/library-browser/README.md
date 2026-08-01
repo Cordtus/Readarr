@@ -130,17 +130,21 @@ torrents and must not be used to decide Deluge retention.
 `scripts/probe-mam-release-metadata.py` is a read-only, sanitized capability
 probe for the homeserver. It reads only the protected local request-desk
 configuration at `/home/sv/library-browser/readarr-request.json`, takes one
-existing Readarr book ID on standard input, and reports JSON field names and
-types only. It never prints the configuration, URLs, API key, cookies, GUIDs,
-download URLs, titles, or tracker passkeys. It exits with status 3 if Readarr
-does not return an explicit boolean `freeleech`, `vip`, or `vipFreeleech`
-field; that result means the request desk must not label releases as VIP or
-freeleech.
+existing Readarr book ID on standard input, and reports the usable
+`freeleech` field name and JSON type only. It never prints the configuration,
+URLs, API key, cookies, GUIDs, download URLs, titles, or tracker passkeys. It
+exits with status 3 if Readarr does not return an explicit boolean
+`freeleech` field; that result means the request desk must not label the
+release freeleech.
+
+This is generic release metadata only. It does not prove that the account
+currently has VIP status, which is time-bound and must be determined from
+current account entitlement rather than inferred from a release field.
 
 Run it as `sv` on the homeserver, supplying a known local Readarr book ID:
 
 ```fish
-printf '%s\\n' BOOK_ID | python3 /home/sv/library-browser/scripts/probe-mam-release-metadata.py
+printf '%s\n' BOOK_ID | python3 /home/sv/library-browser/scripts/probe-mam-release-metadata.py
 ```
 
 ## Responsive bookcase verification
