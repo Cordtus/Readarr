@@ -57,6 +57,28 @@ target that created it and remains single-use. Release listings and grabs are
 made only through that target. No release is grabbed merely because it is
 displayed.
 
+## MAM membership, sharing, and points boundary
+
+MAM VIP eligibility is an indexer and tracker concern. If the authenticated
+MAM indexer returns a VIP-marked release, it is treated like any other
+eligible interactive release and is still subject to the reader's explicit
+selection. The request desk must not reintroduce an MAM-only filter or infer
+eligibility from release titles.
+
+Freeleech wedges are consumable tracker-side rewards for individual torrents;
+bonus points can also be used for upload credit, VIP status, seedtime fixes,
+and torrent-ratio changes. The library-browser and either Readarr instance
+must not buy, spend, apply, or schedule any of these. They do not have a
+safe, confirmed tracker transaction contract in this project, and an
+automatic action could spend points or change an obligation without a
+reader's explicit tracker confirmation.
+
+The download client remains responsible for keeping successfully grabbed
+torrents available to seed. The integration must not auto-remove completed
+MAM downloads, purchase a seedtime fix, or apply a ratio change. This retains
+the tracker-side 72-hour seedtime path that earns bonus points and avoids
+masking sharing obligations.
+
 ## Verification
 
 Regression tests will cover Audio-only, Written-only, both-format, and
@@ -64,4 +86,7 @@ one-target-unavailable search results; selecting the complementary action
 must use the intended target and leave the existing target untouched. Live
 acceptance will verify the container's mount/network/service state, both
 catalogue roots, Readarr's imported file, the shelf entry, and Plex's Music
-library visibility for Audio imports.
+library visibility for Audio imports. A VIP-visible MAM release remains
+selectable through the normal release screen; no test or implementation may
+simulate tracker point spending, freeleech application, ratio changes, or
+seedtime fixes.
