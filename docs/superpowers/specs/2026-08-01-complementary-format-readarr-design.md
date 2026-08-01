@@ -91,6 +91,12 @@ MAM downloads, purchase a seedtime fix, or apply a ratio change. This retains
 the tracker-side 72-hour seedtime path that earns bonus points and avoids
 masking sharing obligations.
 
+Both Readarr catalogues must set `removeCompletedDownloads` to `false` for
+their MAM-capable download client. Importing a file into `/plex/Books` or
+`/plex/Audiobooks` must not remove its torrent from the download client; any
+eventual cleanup remains a separate, explicit retention decision after the
+tracker obligations are satisfied.
+
 ## Verification
 
 Regression tests will cover Audio-only, Written-only, both-format, and
