@@ -119,6 +119,30 @@ release choice uses a short-lived, single-use server-side token. A success
 response confirms the specific Readarr action; it does not promise that a file
 has already imported into the library.
 
+## MAM retention and release metadata
+
+The MAM-capable Deluge download client is configured with
+`RemoveCompletedDownloads: false`. Keep that setting in every Readarr
+catalogue so imported MAM torrents stay in Deluge for their required sharing
+period. The unrelated SABnzbd removal setting is not evidence about MAM
+torrents and must not be used to decide Deluge retention.
+
+`scripts/probe-mam-release-metadata.py` is a read-only, sanitized capability
+probe for the homeserver. It reads only the protected local request-desk
+configuration at `/home/sv/library-browser/readarr-request.json`, takes one
+existing Readarr book ID on standard input, and reports JSON field names and
+types only. It never prints the configuration, URLs, API key, cookies, GUIDs,
+download URLs, titles, or tracker passkeys. It exits with status 3 if Readarr
+does not return an explicit boolean `freeleech`, `vip`, or `vipFreeleech`
+field; that result means the request desk must not label releases as VIP or
+freeleech.
+
+Run it as `sv` on the homeserver, supplying a known local Readarr book ID:
+
+```fish
+printf '%s\\n' BOOK_ID | python3 /home/sv/library-browser/scripts/probe-mam-release-metadata.py
+```
+
 ## Responsive bookcase verification
 
 The landing page and every request state share the same reading-room shell.

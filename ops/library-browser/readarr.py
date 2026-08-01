@@ -55,6 +55,7 @@ class Release:
     title: str
     size: int
     download_allowed: bool
+    freeleech: bool = False
 
 
 @dataclass(frozen=True)
@@ -227,15 +228,17 @@ class ReadarrClient:
         title = item.get("title")
         size = item.get("size", 0)
         download_allowed = item.get("downloadAllowed")
+        freeleech = item.get("freeleech", False)
         if (
             not isinstance(guid, str) or not guid
             or not isinstance(indexer_id, int) or isinstance(indexer_id, bool)
             or not isinstance(title, str) or not title
             or not isinstance(size, int) or isinstance(size, bool) or size < 0
             or not isinstance(download_allowed, bool)
+            or not isinstance(freeleech, bool)
         ):
             raise ReadarrError("Readarr returned an invalid release")
-        return Release(guid, indexer_id, title, size, download_allowed)
+        return Release(guid, indexer_id, title, size, download_allowed, freeleech)
 
     def _normalize_candidate(self, item):
         if not isinstance(item, Mapping):

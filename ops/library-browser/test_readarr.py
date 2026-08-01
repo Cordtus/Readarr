@@ -174,6 +174,46 @@ class ReadarrClientTest(unittest.TestCase):
         self.assertTrue(releases[0].download_allowed)
         self.assertNotIn("downloadUrl", vars(releases[0]))
 
+    def test_release_keeps_explicit_upstream_freeleech_metadata_only(self):
+        self.responses.append(FakeResponse(200, [{
+            "guid": "mam-guid",
+            "indexerId": 7,
+            "title": "A title - Unabridged",
+            "size": 123456789,
+            "downloadAllowed": True,
+            "freeleech": True,
+        }]))
+
+        release = self.client.search_releases(99)[0]
+
+        self.assertTrue(release.freeleech)
+
+    def test_release_defaults_missing_upstream_freeleech_metadata_to_false(self):
+        self.responses.append(FakeResponse(200, [{
+            "guid": "mam-guid",
+            "indexerId": 7,
+            "title": "A title - Unabridged",
+            "size": 123456789,
+            "downloadAllowed": True,
+        }]))
+
+        release = self.client.search_releases(99)[0]
+
+        self.assertFalse(release.freeleech)
+
+    def test_release_rejects_non_boolean_upstream_freeleech_metadata(self):
+        self.responses.append(FakeResponse(200, [{
+            "guid": "mam-guid",
+            "indexerId": 7,
+            "title": "A title - Unabridged",
+            "size": 123456789,
+            "downloadAllowed": True,
+            "freeleech": "true",
+        }]))
+
+        with self.assertRaisesRegex(readarr.ReadarrError, "invalid release"):
+            self.client.search_releases(99)
+
     def test_grab_release_posts_only_the_selected_release_identity(self):
         self.responses.append(FakeResponse(200, {"guid": "mam-guid", "indexerId": 7}))
 
