@@ -141,6 +141,52 @@ This is generic release metadata only. It does not prove that the account
 currently has VIP status, which is time-bound and must be determined from
 current account entitlement rather than inferred from a release field.
 
+## Written Readarr catalogue
+
+`scripts/provision-readarr-books.fish` provisions the independent Written
+catalogue. It is intentionally an LXD-only operation: it creates one
+unprivileged Debian 12 container named `readarr-books`, limited to 2 CPUs,
+2GiB RAM, and a 20GiB root disk. It autostarts on the existing `lxdbr1`
+bridge at `10.114.28.186`, and `readarr-books.service` binds Readarr only to
+that private address on port 8787. It creates no LXD proxy device.
+
+The only media device is an idmapped `books` disk from `/plex/Books` to
+`/plex/Books`. `/plex/Audiobooks` is neither mounted nor configured as a root
+folder. This boundary is what keeps Written imports independent from the
+existing Audio Readarr instance.
+
+Run this on the homeserver only after providing a separately built, already
+trusted Readarr application bundle. The bundle is application files only; the
+script never copies the host Readarr database, configuration, API key,
+indexers, download-client passwords, Caddy configuration, or either media
+root. Use Fish:
+
+```fish
+set -lx READARR_BOOKS_BUNDLE /srv/readarr-publish
+fish /home/sv/library-browser/scripts/provision-readarr-books.fish
+fish /home/sv/library-browser/scripts/verify-readarr-books.fish
+```
+
+Provisioning deliberately leaves all catalog credentials absent. Supply the
+MAM and Deluge credentials separately through the new instance's private
+local API, then configure exactly one root folder (`/plex/Books`), the Written
+quality profile, and its Deluge client. That client must have
+`RemoveCompletedDownloads: false`, so MAM torrents remain available to seed
+after imports. Credentials must never be copied from the Audio instance or
+placed in this repository, the command line, or the provisioning environment.
+
+`scripts/verify-readarr-books.fish` is read-only. It rejects a missing or
+privileged instance, the wrong bridge/address/resource limits, a missing
+idmapped Books mount, any Audio mount or proxy device, an inactive service or
+non-private listener, any root folder other than `/plex/Books`, and a Deluge
+client that removes completed torrents. It prints only pass/fail facts, never
+database values or credentials.
+
+After the verifier passes, take an LXD snapshot. Rollback is limited to
+stopping and deleting `readarr-books` (or restoring that snapshot); it must
+never delete `/plex/Books`, the host Audio Readarr data, host Deluge data, or
+the library-browser release.
+
 Run it as `sv` on the homeserver, supplying a known local Readarr book ID:
 
 ```fish
