@@ -1,5 +1,6 @@
 import json
 import sys
+import urllib.parse
 import unittest
 from contextlib import redirect_stdout
 from importlib.util import module_from_spec, spec_from_file_location
@@ -62,17 +63,26 @@ class ReadarrClientTest(unittest.TestCase):
     def setUp(self):
         self.requests = []
         self.responses = []
-        self.configuration = readarr.ReadarrConfiguration(
+        self.audiobooks_configuration = readarr.ReadarrConfiguration(
+            base_url="http://audio-readarr:8787",
+            api_key="audio-readarr-key",
             root_folder_path="/configured/library",
             quality_profile_id=4,
             metadata_profile_id=7,
             monitor="all",
             monitor_new_items="all",
         )
+        self.books_configuration = readarr.ReadarrConfiguration(
+            base_url="http://books-readarr:8787",
+            api_key="books-readarr-key",
+            root_folder_path="/configured/books",
+            quality_profile_id=5,
+            metadata_profile_id=8,
+            monitor="all",
+            monitor_new_items="all",
+        )
         self.client = readarr.ReadarrClient(
-            "http://readarr:8787",
-            "not-a-real-key",
-            configurations={"audiobooks": self.configuration, "books": self.configuration},
+            {"audiobooks": self.audiobooks_configuration, "books": self.books_configuration},
             opener=self.opener,
         )
         self.book_candidate = readarr.Candidate(
@@ -93,7 +103,11 @@ class ReadarrClientTest(unittest.TestCase):
     def opener(self, request, timeout):
         headers = {"X-Api-Key": request.get_header("X-api-key")}
         self.requests.append({
-            "path": request.full_url.removeprefix("http://readarr:8787"),
+            "url": request.full_url,
+            "path": urllib.parse.urlsplit(request.full_url).path + (
+                "?" + urllib.parse.urlsplit(request.full_url).query
+                if urllib.parse.urlsplit(request.full_url).query else ""
+            ),
             "method": request.get_method(),
             "headers": headers,
             "timeout": timeout,
@@ -116,7 +130,8 @@ class ReadarrClientTest(unittest.TestCase):
         candidates = self.client.search("A title", "audiobooks")
 
         self.assertEqual(self.requests[0]["path"], "/api/v1/search?term=A+title")
-        self.assertEqual(self.requests[0]["headers"]["X-Api-Key"], "not-a-real-key")
+        self.assertEqual(self.requests[0]["url"], "http://audio-readarr:8787/api/v1/search?term=A+title")
+        self.assertEqual(self.requests[0]["headers"]["X-Api-Key"], "audio-readarr-key")
         self.assertEqual(self.requests[0]["timeout"], 60)
         self.assertEqual(candidates[0].title, "A title")
         self.assertEqual(candidates[0].author_name, "An author")
@@ -154,6 +169,8 @@ class ReadarrClientTest(unittest.TestCase):
                 ("book", "Pride and Prejudice", 1813),
             ],
         )
+        self.assertEqual(self.requests[0]["url"], "http://books-readarr:8787/api/v1/search?term=Pride+and+Prejudice")
+        self.assertEqual(self.requests[0]["headers"]["X-Api-Key"], "books-readarr-key")
 
     def test_add_book_does_not_start_automatic_search(self):
         self.responses.append(FakeResponse(201, {"id": 99, "title": "A title"}))
@@ -176,7 +193,7 @@ class ReadarrClientTest(unittest.TestCase):
             "downloadUrl": "https://private.example/download",
         }]))
 
-        releases = self.client.search_releases(99)
+        releases = self.client.search_releases(99, "audiobooks")
 
         self.assertEqual(self.requests[0]["path"], "/api/v1/release?bookId=99")
         self.assertEqual(releases[0].guid, "mam-guid")
@@ -196,7 +213,7 @@ class ReadarrClientTest(unittest.TestCase):
             "freeleech": True,
         }]))
 
-        release = self.client.search_releases(99)[0]
+        release = self.client.search_releases(99, "audiobooks")[0]
 
         self.assertTrue(release.freeleech)
 
@@ -209,7 +226,7 @@ class ReadarrClientTest(unittest.TestCase):
             "downloadAllowed": True,
         }]))
 
-        release = self.client.search_releases(99)[0]
+        release = self.client.search_releases(99, "audiobooks")[0]
 
         self.assertFalse(release.freeleech)
 
@@ -224,7 +241,7 @@ class ReadarrClientTest(unittest.TestCase):
         }]))
 
         with self.assertRaisesRegex(readarr.ReadarrError, "invalid release"):
-            self.client.search_releases(99)
+            self.client.search_releases(99, "audiobooks")
 
     def test_grab_release_posts_only_the_selected_release_identity(self):
         self.responses.append(FakeResponse(200, {"guid": "mam-guid", "indexerId": 7}))
@@ -235,7 +252,7 @@ class ReadarrClientTest(unittest.TestCase):
             title="A title - Unabridged",
             size=123456789,
             download_allowed=True,
-        ), book_id=99)
+        ), book_id=99, target="audiobooks")
 
         self.assertEqual(self.requests[0]["path"], "/api/v1/release")
         self.assertEqual(
@@ -272,9 +289,9 @@ class ReadarrClientTest(unittest.TestCase):
 
     def test_specific_book_request_limits_new_author_to_the_requested_book(self):
         client = readarr.ReadarrClient(
-            "http://readarr:8787",
-            "not-a-real-key",
-            configurations={"audiobooks": readarr.ReadarrConfiguration(
+            {"audiobooks": readarr.ReadarrConfiguration(
+                base_url="http://audio-readarr:8787",
+                api_key="audio-readarr-key",
                 root_folder_path="/configured/library",
                 quality_profile_id=4,
                 metadata_profile_id=7,
@@ -364,19 +381,27 @@ class ReadarrClientTest(unittest.TestCase):
 
     def test_invalid_configuration_and_http_errors_do_not_expose_api_key(self):
         with self.assertRaisesRegex(readarr.ReadarrError, "root_folder_path"):
-            readarr.ReadarrConfiguration("", 4, 7, "all", "all")
+            readarr.ReadarrConfiguration("http://audio-readarr:8787", "audio-readarr-key", "", 4, 7, "all", "all")
 
         self.responses.append(FakeResponse(500, {"message": "backend failed"}))
         with self.assertRaises(readarr.ReadarrError) as raised:
             self.client.search("A title", "audiobooks")
 
-        self.assertNotIn("not-a-real-key", str(raised.exception))
+        self.assertNotIn("audio-readarr-key", str(raised.exception))
 
     def test_client_rejects_non_string_empty_or_decorated_base_urls(self):
         for base_url in (None, 1, "", "http://readarr:8787?setting=value", "http://readarr:8787#fragment"):
             with self.subTest(base_url=base_url):
                 with self.assertRaisesRegex(readarr.ReadarrError, "base URL"):
-                    readarr.ReadarrClient(base_url, "not-a-real-key", {"audiobooks": self.configuration})
+                    readarr.ReadarrConfiguration(
+                        base_url,
+                        "not-a-real-key",
+                        "/configured/library",
+                        4,
+                        7,
+                        "all",
+                        "all",
+                    )
 
 
 class MamReleaseMetadataProbeTest(unittest.TestCase):

@@ -1,12 +1,14 @@
 #!/usr/bin/env fish
 
 # Behavior: Given an unprovisioned Written catalogue, provisioning must create
-# only the approved LXD resources; verification must reject every unsafe
-# device and preserve the same topology on a second run.
+# only the approved LXD resources and start Readarr with an explicit private
+# bind; verification must reject every unsafe device and preserve the same
+# topology on a second run.
 # Oracle: docs/superpowers/plans/2026-08-01-complementary-format-readarr.md.
 # Plausible wrong implementation: re-adding an inherited device, retaining an
-# inherited default NIC, or accepting an arbitrary host bind. Observable
-# assertion: fake-LXD command log and verifier exit status. Layer:
+# inherited default NIC, or leaving the Readarr process bound to every
+# interface. Observable assertion: generated systemd service environment,
+# fake-LXD command log, and verifier exit status. Layer:
 # command-contract test because LXD is the public boundary these scripts
 # control.
 
@@ -17,6 +19,7 @@ set -l log "$sandbox/lxc.log"
 set -l state "$sandbox/instance-created"
 set -l devices "$sandbox/local-devices"
 set -l executable "$sandbox/readarr-executable"
+set -l unit "$sandbox/readarr-books.service"
 set -l bundle "$sandbox/readarr-bundle"
 mkdir $bundle
 touch "$bundle/Readarr"
@@ -35,6 +38,7 @@ printf '%s\n' 'if test "$argv[1]" = config; and test "$argv[2]" = device; and te
 printf '%s\n' 'if test "$argv[1]" = query' >>$fake_lxc
 printf '%s\n' '  if string match -rq "recursion=1" -- "$argv[2]"; set -l root "{\"type\":\"disk\",\"path\":\"/\",\"size\":\"20GiB\"}"; set -l eth0 "{\"type\":\"nic\",\"network\":\"lxdbr1\",\"ipv4.address\":\"10.114.28.186\"}"; if set -q READARR_BOOKS_TEST_BAD_ROOT; set root "{\"type\":\"disk\",\"path\":\"/wrong\",\"size\":\"20GiB\"}"; end; if set -q READARR_BOOKS_TEST_BAD_BRIDGE; set eth0 "{\"type\":\"nic\",\"network\":\"wrongbr0\",\"ipv4.address\":\"10.114.28.186\"}"; end; if set -q READARR_BOOKS_TEST_BAD_IP; set eth0 "{\"type\":\"nic\",\"network\":\"lxdbr1\",\"ipv4.address\":\"10.114.28.187\"}"; end; set -l extra ""; if set -q READARR_BOOKS_TEST_BAD_AUDIO; set extra ",\"audio\":{\"type\":\"disk\",\"source\":\"/plex/Audiobooks\",\"path\":\"/plex/Audiobooks\"}"; end; if set -q READARR_BOOKS_TEST_EXTRA_DISK; set extra ",\"other\":{\"type\":\"disk\",\"source\":\"/host/private\",\"path\":\"/private\"}"; end; if set -q READARR_BOOKS_TEST_PROXY; set extra "$extra,\"public\":{\"type\":\"proxy\"}"; end; set -l raw ""; if set -q READARR_BOOKS_TEST_RAW_IDMAP; set raw ",\"raw.idmap\":\"both 1000 1000\""; end; printf "{\"expanded_config\":{\"security.privileged\":\"false\",\"limits.cpu\":\"2\",\"limits.memory\":\"2GiB\",\"boot.autostart\":\"true\"$raw},\"expanded_devices\":{\"root\":%s,\"eth0\":%s,\"books\":{\"type\":\"disk\",\"source\":\"/plex/Books\",\"path\":\"/plex/Books\",\"shift\":\"true\"}$extra}}\n" $root $eth0; else; set -l entries; for device in (cat $READARR_BOOKS_TEST_DEVICES 2>/dev/null); set -a entries "\"$device\":{}"; end; printf "{\"devices\":{%s}}\n" (string join , -- $entries); end; exit 0' >>$fake_lxc
 printf '%s\n' 'end' >>$fake_lxc
+printf '%s\n' 'if test "$argv[1]" = file; and test "$argv[2]" = push; and test "$argv[3]" = -; and string match -rq "readarr-books\\.service\\z" -- "$argv[4]"; cat >$READARR_BOOKS_TEST_UNIT; exit 0; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = file; and test "$argv[2]" = push; and string match -rq "/Readarr\$" -- "$argv[4]"; touch $READARR_BOOKS_TEST_EXECUTABLE; exit 0; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = test; and test "$argv[5]" = -x; test -e $READARR_BOOKS_TEST_EXECUTABLE; and exit 0; or exit 1; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = ss; printf "%s\\n" "LISTEN 0 4096 10.114.28.186:8787 0.0.0.0:*"; exit 0; end' >>$fake_lxc
@@ -42,7 +46,7 @@ printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = sqlite3; if stri
 printf '%s\n' 'exit 0' >>$fake_lxc
 chmod +x $fake_lxc
 
-env READARR_BOOKS_LXC=$fake_lxc READARR_BOOKS_TEST_LOG=$log READARR_BOOKS_TEST_STATE=$state READARR_BOOKS_TEST_DEVICES=$devices READARR_BOOKS_TEST_EXECUTABLE=$executable READARR_BOOKS_BUNDLE=$bundle fish --no-config "$script_dir/provision-readarr-books.fish"
+env READARR_BOOKS_LXC=$fake_lxc READARR_BOOKS_TEST_LOG=$log READARR_BOOKS_TEST_STATE=$state READARR_BOOKS_TEST_DEVICES=$devices READARR_BOOKS_TEST_EXECUTABLE=$executable READARR_BOOKS_TEST_UNIT=$unit READARR_BOOKS_BUNDLE=$bundle fish --no-config "$script_dir/provision-readarr-books.fish"
 or exit 1
 
 string match -rq 'launch images:debian/12 readarr-books' < $log
@@ -54,8 +58,10 @@ if string match -rq '/plex/Audiobooks|proxy' < $log
 end
 test -e $executable
 or begin; printf '%s\n' 'Readarr executable was not installed at /opt/Readarr/Readarr' >&2; exit 1; end
+string match -rq '^Environment=Readarr__Server__BindAddress=10\.114\.28\.186$' < $unit
+or begin; printf '%s\n' 'service does not configure Readarr to bind only to its private address' >&2; exit 1; end
 
-env READARR_BOOKS_LXC=$fake_lxc READARR_BOOKS_TEST_LOG=$log READARR_BOOKS_TEST_STATE=$state READARR_BOOKS_TEST_DEVICES=$devices READARR_BOOKS_TEST_EXECUTABLE=$executable READARR_BOOKS_BUNDLE=$bundle fish --no-config "$script_dir/provision-readarr-books.fish"
+env READARR_BOOKS_LXC=$fake_lxc READARR_BOOKS_TEST_LOG=$log READARR_BOOKS_TEST_STATE=$state READARR_BOOKS_TEST_DEVICES=$devices READARR_BOOKS_TEST_EXECUTABLE=$executable READARR_BOOKS_TEST_UNIT=$unit READARR_BOOKS_BUNDLE=$bundle fish --no-config "$script_dir/provision-readarr-books.fish"
 or exit 1
 test (count (string match -r '^launch images:debian/12 readarr-books$' < $log)) -eq 1
 or begin; printf '%s\n' 'second provision relaunched the container' >&2; exit 1; end

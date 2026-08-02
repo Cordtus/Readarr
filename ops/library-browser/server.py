@@ -228,7 +228,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                     )
                     return
                 try:
-                    readarr_client.grab_release(selected.release, selected.book_id)
+                    readarr_client.grab_release(selected.release, selected.book_id, selected.scope)
                 except (ReadarrError, OSError):
                     self.send_request_error(
                         HTTPStatus.SERVICE_UNAVAILABLE,
@@ -260,7 +260,7 @@ def create_handler(roots, readarr_client=None, candidate_store=None, assets_root
                 book_id = added.get("id") if isinstance(added, dict) else None
                 if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
                     raise ReadarrError("Readarr did not return the added book id")
-                releases = readarr_client.search_releases(book_id)
+                releases = readarr_client.search_releases(book_id, selected.target)
                 if not releases:
                     self.send_request_error(
                         HTTPStatus.NOT_FOUND,
@@ -713,6 +713,8 @@ def load_readarr_client(config_path, log=print):
             raise ReadarrError("Readarr request targets are invalid")
         configurations = {
             name: ReadarrConfiguration(
+                base_url=target["url"],
+                api_key=target["apiKey"],
                 root_folder_path=target["rootFolderPath"],
                 quality_profile_id=target["qualityProfileId"],
                 metadata_profile_id=target["metadataProfileId"],
@@ -721,7 +723,7 @@ def load_readarr_client(config_path, log=print):
             )
             for name, target in targets.items()
         }
-        return ReadarrClient(values["url"], values["apiKey"], configurations)
+        return ReadarrClient(configurations)
     except (KeyError, TypeError, ValueError, ReadarrError):
         log("Readarr request desk unavailable: configuration is invalid")
         return None

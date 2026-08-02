@@ -18,10 +18,10 @@ import server
 
 
 READARR_REQUEST_CONFIG = {
-    "url": "https://readarr.example.test",
-    "apiKey": "test-readarr-api-key",
     "targets": {
         "audiobooks": {
+            "url": "https://audio-readarr.example.test",
+            "apiKey": "test-audio-readarr-api-key",
             "rootFolderPath": "/plex/Audiobooks",
             "qualityProfileId": 2,
             "metadataProfileId": 1,
@@ -29,6 +29,8 @@ READARR_REQUEST_CONFIG = {
             "monitorNewItems": "all",
         },
         "books": {
+            "url": "http://10.114.28.186:8787",
+            "apiKey": "test-books-readarr-api-key",
             "rootFolderPath": "/plex/Books",
             "qualityProfileId": 1,
             "metadataProfileId": 1,
@@ -150,12 +152,12 @@ class FakeReadarrClient:
     def request(self, candidate):
         return self.add(candidate)
 
-    def search_releases(self, book_id):
-        self.release_searches.append(book_id)
+    def search_releases(self, book_id, target):
+        self.release_searches.append((book_id, target))
         return self.releases
 
-    def grab_release(self, release, book_id):
-        self.grabs.append((release, book_id))
+    def grab_release(self, release, book_id, target):
+        self.grabs.append((release, book_id, target))
         return {"guid": release.guid, "indexerId": release.indexer_id}
 
 
@@ -331,14 +333,19 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
             client = server.load_readarr_client(config_path)
 
         self.assertIsInstance(client, readarr.ReadarrClient)
-        self.assertEqual(client._base_url, READARR_REQUEST_CONFIG["url"])
-        self.assertEqual(client._api_key, READARR_REQUEST_CONFIG["apiKey"])
         self.assertEqual(
             {
-                name: (configuration.root_folder_path, configuration.quality_profile_id)
+                name: (
+                    configuration.base_url,
+                    configuration.root_folder_path,
+                    configuration.quality_profile_id,
+                )
                 for name, configuration in client._configurations.items()
             },
-            {"audiobooks": ("/plex/Audiobooks", 2), "books": ("/plex/Books", 1)},
+            {
+                "audiobooks": ("https://audio-readarr.example.test", "/plex/Audiobooks", 2),
+                "books": ("http://10.114.28.186:8787", "/plex/Books", 1),
+            },
         )
 
     def test_missing_configuration_leaves_the_request_desk_unavailable(self):
@@ -352,7 +359,9 @@ class ReadarrStartupConfigurationTest(unittest.TestCase):
 
     def test_invalid_configuration_values_are_not_reported(self):
         secret = "DO_NOT_LOG_THIS_SECRET"
-        values = dict(READARR_REQUEST_CONFIG, url="http://[", apiKey=secret)
+        values = json.loads(json.dumps(READARR_REQUEST_CONFIG))
+        values["targets"]["books"]["url"] = "http://["
+        values["targets"]["books"]["apiKey"] = secret
         with tempfile.TemporaryDirectory() as directory:
             config_path = Path(directory) / "readarr-request.json"
             config_path.write_text(json.dumps(values), encoding="utf-8")
@@ -760,7 +769,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("Audio", release_panel.text_content())
         self.assertIn("Download this release", release_panel.text_content())
         self.assertEqual(self.readarr_client.adds, self.readarr_client.candidates)
-        self.assertEqual(self.readarr_client.release_searches, [1])
+        self.assertEqual(self.readarr_client.release_searches, [(1, "audiobooks")])
         self.assertEqual(self.readarr_client.grabs, [])
 
     def test_written_book_scope_is_preserved_through_confirmation(self):
@@ -779,6 +788,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(self.readarr_client.searches, [("Dangerous title", "books")])
         self.assertEqual([candidate.target for candidate in self.readarr_client.adds], ["books"])
+        self.assertEqual(self.readarr_client.release_searches, [(1, "books")])
         self.assertIn("Written", parse_html(body.decode()).text_content())
 
     def test_author_confirmation_explains_the_broader_monitoring_action(self):
@@ -1113,6 +1123,7 @@ class LibraryBrowserTest(unittest.TestCase):
         self.assertIn("Readarr accepted the selected release.", response_body.decode())
         self.assertEqual(self.readarr_client.grabs[0][0].guid, "release-2")
         self.assertEqual(self.readarr_client.grabs[0][1], 1)
+        self.assertEqual(self.readarr_client.grabs[0][2], "audiobooks")
 
         response, response_body = self.request(
             "POST",

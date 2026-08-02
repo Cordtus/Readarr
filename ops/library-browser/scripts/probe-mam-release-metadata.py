@@ -73,8 +73,10 @@ def load_protected_config():
         config = json.load(config_file)
     if not isinstance(config, dict):
         raise ValueError("protected request-desk configuration is invalid")
-    url = config.get("url")
-    api_key = config.get("apiKey")
+    targets = config.get("targets")
+    audio_target = targets.get("audiobooks") if isinstance(targets, dict) else None
+    url = audio_target.get("url") if isinstance(audio_target, dict) else None
+    api_key = audio_target.get("apiKey") if isinstance(audio_target, dict) else None
     if not isinstance(url, str) or not url or not isinstance(api_key, str) or not api_key:
         raise ValueError("protected request-desk configuration is invalid")
     return {"url": url.rstrip("/"), "apiKey": api_key}

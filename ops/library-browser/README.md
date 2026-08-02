@@ -38,10 +38,10 @@ instance:
 
 ```json
 {
-  "url": "https://REPLACE_WITH_READARR_URL",
-  "apiKey": "REPLACE_WITH_READARR_API_KEY",
   "targets": {
     "audiobooks": {
+      "url": "https://REPLACE_WITH_AUDIOBOOK_READARR_URL",
+      "apiKey": "REPLACE_WITH_AUDIOBOOK_READARR_API_KEY",
       "rootFolderPath": "REPLACE_WITH_AUDIOBOOKS_ROOT_FOLDER_PATH",
       "qualityProfileId": "REPLACE_WITH_AUDIOBOOKS_QUALITY_PROFILE_ID",
       "metadataProfileId": "REPLACE_WITH_AUDIOBOOKS_METADATA_PROFILE_ID",
@@ -49,6 +49,8 @@ instance:
       "monitorNewItems": "REPLACE_WITH_AUDIOBOOKS_MONITOR_NEW_ITEMS_VALUE"
     },
     "books": {
+      "url": "http://10.114.28.186:8787",
+      "apiKey": "REPLACE_WITH_WRITTEN_READARR_API_KEY",
       "rootFolderPath": "REPLACE_WITH_BOOKS_ROOT_FOLDER_PATH",
       "qualityProfileId": "REPLACE_WITH_BOOKS_QUALITY_PROFILE_ID",
       "metadataProfileId": "REPLACE_WITH_BOOKS_METADATA_PROFILE_ID",
@@ -61,7 +63,8 @@ instance:
 
 Replace every placeholder before starting the watchdog. The template is valid
 JSON, but the quoted profile placeholders must be replaced with the numeric IDs
-returned by Readarr. The two target names are required. Audiobooks is selected
+returned by Readarr. The two target names are required, and each must include
+the URL and API key for its own Readarr instance. Audiobooks is selected
 by default in the request desk; its root and quality profile must therefore be
 the audiobook target. Written books remains an explicit alternate choice.
 After authenticated access to Readarr, use the instance's root-folder,
@@ -148,7 +151,10 @@ catalogue. It is intentionally an LXD-only operation: it creates one
 unprivileged Debian 12 container named `readarr-books`, limited to 2 CPUs,
 2GiB RAM, and a 20GiB root disk. It autostarts on the existing `lxdbr1`
 bridge at `10.114.28.186`, and `readarr-books.service` binds Readarr only to
-that private address on port 8787. It creates no LXD proxy device.
+that private address on port 8787. The service sets `Readarr__Server__BindAddress`
+and `Readarr__Server__Port` explicitly because Readarr reads its listener
+configuration from XML/environment, not `-bind` or `-port` command-line
+arguments. It creates no LXD proxy device.
 
 The named `eth0` override uses LXD's managed `network: lxdbr1` property plus
 the fixed address; it does not combine a profile-provided managed network with

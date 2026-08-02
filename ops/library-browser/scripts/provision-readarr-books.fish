@@ -124,7 +124,9 @@ set -l unit (string join \n \
     'Type=simple' \
     'User=readarr' \
     'Group=readarr' \
-    'ExecStart=/opt/Readarr/Readarr -nobrowser -data=/var/lib/readarr -bind=10.114.28.186 -port=8787' \
+    'Environment=Readarr__Server__BindAddress=10.114.28.186' \
+    'Environment=Readarr__Server__Port=8787' \
+    'ExecStart=/opt/Readarr/Readarr -nobrowser -data=/var/lib/readarr' \
     'Restart=on-failure' \
     'RestartSec=5' \
     '' \

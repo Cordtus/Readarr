@@ -17,6 +17,8 @@ class ReadarrError(Exception):
 
 @dataclass(frozen=True)
 class ReadarrConfiguration:
+    base_url: str
+    api_key: str
     root_folder_path: str
     quality_profile_id: int
     metadata_profile_id: int
@@ -24,6 +26,18 @@ class ReadarrConfiguration:
     monitor_new_items: str
 
     def __post_init__(self):
+        if not isinstance(self.base_url, str) or not self.base_url:
+            raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
+        parsed_url = urllib.parse.urlsplit(self.base_url)
+        if (
+            parsed_url.scheme not in ("http", "https")
+            or not parsed_url.netloc
+            or parsed_url.query
+            or parsed_url.fragment
+        ):
+            raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
+        if not isinstance(self.api_key, str) or not self.api_key:
+            raise ReadarrError("Readarr API key must be configured")
         if not isinstance(self.root_folder_path, str) or not self.root_folder_path.strip():
             raise ReadarrError("root_folder_path must be configured")
         if not isinstance(self.quality_profile_id, int) or isinstance(self.quality_profile_id, bool):
@@ -99,25 +113,9 @@ class CandidateStore:
 class ReadarrClient:
     def __init__(
         self,
-        base_url,
-        api_key,
-        configurations: Optional[Mapping[str, ReadarrConfiguration]] = None,
+        configurations: Mapping[str, ReadarrConfiguration],
         opener=urllib.request.urlopen,
     ):
-        if not isinstance(base_url, str) or not base_url:
-            raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
-        parsed_url = urllib.parse.urlsplit(base_url)
-        if (
-            parsed_url.scheme not in ("http", "https")
-            or not parsed_url.netloc
-            or parsed_url.query
-            or parsed_url.fragment
-        ):
-            raise ReadarrError("Readarr base URL must be an absolute HTTP URL")
-        if not isinstance(api_key, str) or not api_key:
-            raise ReadarrError("Readarr API key must be configured")
-        self._base_url = base_url.rstrip("/")
-        self._api_key = api_key
         if not isinstance(configurations, Mapping) or not configurations:
             raise ReadarrError("Readarr request targets must be configured")
         if any(
@@ -132,8 +130,8 @@ class ReadarrClient:
     def search(self, term, target):
         if not isinstance(term, str) or not term.strip():
             raise ReadarrError("search term must not be empty")
-        self._require_configuration(target)
-        response = self._send("GET", "/api/v1/search?{}".format(
+        configuration = self._require_configuration(target)
+        response = self._send(configuration, "GET", "/api/v1/search?{}".format(
             urllib.parse.urlencode({"term": term})
         ))
         if not isinstance(response, list):
@@ -155,7 +153,7 @@ class ReadarrClient:
                 raise ReadarrError("invalid author candidate")
             if author.get("id"):
                 raise ReadarrError("author candidate already exists")
-            return self._send("POST", "/api/v1/author", self._new_author(author, configuration))
+            return self._send(configuration, "POST", "/api/v1/author", self._new_author(author, configuration))
         if candidate.kind == "book":
             book = candidate.lookup.get("book")
             if not isinstance(book, Mapping):
@@ -171,31 +169,33 @@ class ReadarrClient:
                     payload["author"]["addOptions"]["booksToMonitor"] = [payload["foreignBookId"]]
             payload["addOptions"] = {}
             payload["monitored"] = True
-            return self._send("POST", "/api/v1/book", payload)
+            return self._send(configuration, "POST", "/api/v1/book", payload)
         raise ReadarrError("invalid request candidate")
 
     def request(self, candidate):
         """Add a candidate without searching; releases are selected separately."""
         return self.add(candidate)
 
-    def search_releases(self, book_id):
+    def search_releases(self, book_id, target):
         if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
             raise ReadarrError("invalid Readarr book id")
-        response = self._send("GET", "/api/v1/release?{}".format(
+        configuration = self._require_configuration(target)
+        response = self._send(configuration, "GET", "/api/v1/release?{}".format(
             urllib.parse.urlencode({"bookId": book_id})
         ))
         if not isinstance(response, list):
             raise ReadarrError("Readarr returned an invalid release response")
         return [self._normalize_release(item) for item in response]
 
-    def grab_release(self, release, book_id):
+    def grab_release(self, release, book_id, target):
         if not isinstance(release, Release):
             raise ReadarrError("invalid release selection")
         if not release.download_allowed:
             raise ReadarrError("release is not available for download")
         if not isinstance(book_id, int) or isinstance(book_id, bool) or book_id <= 0:
             raise ReadarrError("invalid Readarr book id")
-        return self._send("POST", "/api/v1/release", {
+        configuration = self._require_configuration(target)
+        return self._send(configuration, "POST", "/api/v1/release", {
             "guid": release.guid,
             "indexerId": release.indexer_id,
             "bookId": book_id,
@@ -289,13 +289,13 @@ class ReadarrClient:
             return None
         return year if 1 <= year <= 9999 else None
 
-    def _send(self, method, path, payload=None):
+    def _send(self, configuration, method, path, payload=None):
         body = None if payload is None else json.dumps(payload).encode("utf-8")
-        headers = {"X-Api-Key": self._api_key, "Accept": "application/json"}
+        headers = {"X-Api-Key": configuration.api_key, "Accept": "application/json"}
         if body is not None:
             headers["Content-Type"] = "application/json; charset=utf-8"
         request = urllib.request.Request(
-            "{}{}".format(self._base_url, path),
+            "{}{}".format(configuration.base_url.rstrip("/"), path),
             data=body,
             headers=headers,
             method=method,
