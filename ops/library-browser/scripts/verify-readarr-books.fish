@@ -30,6 +30,7 @@ printf '%s\n' $config | jq --exit-status --arg address "$address" '
     .config["limits.cpu"] == "2" and
     .config["limits.memory"] == "2GiB" and
     .config["boot.autostart"] == "true" and
+    (.config | has("raw.idmap") | not) and
     (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
     (.devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
     (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
@@ -38,6 +39,8 @@ printf '%s\n' $config | jq --exit-status --arg address "$address" '
 ' >/dev/null
 or fail 'LXD device or resource boundary is not exact'
 
+lxc_output exec $instance -- test -x /opt/Readarr/Readarr
+or fail 'Readarr executable is not installed at /opt/Readarr/Readarr'
 lxc_output exec $instance -- systemctl is-active --quiet readarr-books.service
 or fail 'Readarr service is not active'
 set -l listening (lxc_output exec $instance -- ss -ltnH 'sport = :8787')

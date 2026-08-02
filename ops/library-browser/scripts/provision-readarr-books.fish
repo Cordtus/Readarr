@@ -41,6 +41,20 @@ function ensure_device_override
     end
 end
 
+function lxd_boundary_is_safe
+    set -l config (lxc_run config show $argv[1] --expanded --format json)
+    or return 1
+    printf '%s\n' $config | jq --exit-status --arg address "$argv[2]" '
+        .config["security.privileged"] == "false" and
+        (.config | has("raw.idmap") | not) and
+        (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
+        (.devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
+        (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
+        ([.devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
+        ([.devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
+    ' >/dev/null
+end
+
 if not lxc_run info $instance >/dev/null 2>&1
     lxc_run launch $image $instance
     or exit 1
@@ -83,8 +97,20 @@ lxc_run exec $instance -- id readarr
 or lxc_run exec $instance -- useradd --system --home-dir /var/lib/readarr --create-home --shell /usr/sbin/nologin readarr
 or exit 1
 lxc_run exec $instance -- mkdir --parents /opt/Readarr /var/lib/readarr; or exit 1
-lxc_run file push --recursive $bundle/ $instance/opt/Readarr/
-or exit 1
+set -l bundle_entries $bundle/*
+if test (count $bundle_entries) -eq 0
+    printf '%s\n' 'READARR_BOOKS_BUNDLE has no application files to install.' >&2
+    exit 2
+end
+for bundle_entry in $bundle_entries
+    lxc_run file push --recursive $bundle_entry $instance/opt/Readarr/
+    or exit 1
+end
+lxc_run exec $instance -- test -x /opt/Readarr/Readarr
+or begin
+    printf '%s\n' 'Readarr executable was not installed at /opt/Readarr/Readarr.' >&2
+    exit 1
+end
 lxc_run exec $instance -- chown --recursive readarr:readarr /opt/Readarr /var/lib/readarr
 or exit 1
 
@@ -106,6 +132,11 @@ set -l unit (string join \n \
     'WantedBy=multi-user.target')
 printf '%s\n' $unit | lxc_run file push - $instance/etc/systemd/system/readarr-books.service
 or exit 1
+lxd_boundary_is_safe $instance $address
+or begin
+    printf '%s\n' 'Refusing to enable Readarr: expanded LXD topology exceeds the Written catalogue boundary.' >&2
+    exit 1
+end
 lxc_run exec $instance -- systemctl daemon-reload; or exit 1
 lxc_run exec $instance -- systemctl enable --now readarr-books.service; or exit 1
 

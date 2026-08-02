@@ -163,7 +163,9 @@ Run this on the homeserver only after providing a separately built, already
 trusted Readarr application bundle. The bundle is application files only; the
 script never copies the host Readarr database, configuration, API key,
 indexers, download-client passwords, Caddy configuration, or either media
-root. Use Fish:
+root. It copies the bundle's contents into `/opt/Readarr` and verifies the
+executable is present at `/opt/Readarr/Readarr` before it can enable the
+service. Use Fish:
 
 ```fish
 set -lx READARR_BOOKS_BUNDLE /srv/readarr-publish
@@ -190,6 +192,13 @@ overrides inherited `root` and `eth0` devices once, then reuses their local
 overrides on later runs; rerunning it neither relaunches the container nor
 adds a second Books mount. It prints only pass/fail facts, never database
 values or credentials.
+
+Before enabling `readarr-books.service`, provisioning repeats the structural
+boundary check against LXD's expanded JSON. It refuses to enable the service
+if the inherited/default topology exposes an Audio or other host disk, any
+proxy device, or `raw.idmap`; only the named root disk, idmapped Books disk,
+and managed `eth0` are allowed. This is an explicit guard against profile
+changes that occur outside this script.
 
 After the verifier passes, take an LXD snapshot. Rollback is limited to
 stopping and deleting `readarr-books` (or restoring that snapshot); it must
