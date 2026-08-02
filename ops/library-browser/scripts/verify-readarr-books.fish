@@ -31,7 +31,7 @@ printf '%s\n' $config | jq --exit-status --arg address "$address" '
     .config["limits.memory"] == "2GiB" and
     .config["boot.autostart"] == "true" and
     (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
-    (.devices.eth0 | .type == "nic" and .parent == "lxdbr1" and .["ipv4.address"] == $address) and
+    (.devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
     (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
     ([.devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
     ([.devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)

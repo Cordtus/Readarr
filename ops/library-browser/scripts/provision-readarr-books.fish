@@ -54,7 +54,7 @@ lxc_run config set $instance boot.autostart true; or exit 1
 ensure_device_override $instance root; or exit 1
 lxc_run config device set $instance root size 20GiB; or exit 1
 ensure_device_override $instance eth0; or exit 1
-lxc_run config device set $instance eth0 parent lxdbr1; or exit 1
+lxc_run config device set $instance eth0 network lxdbr1; or exit 1
 lxc_run config device set $instance eth0 ipv4.address $address; or exit 1
 
 if not has_local_device $instance books

@@ -150,6 +150,10 @@ unprivileged Debian 12 container named `readarr-books`, limited to 2 CPUs,
 bridge at `10.114.28.186`, and `readarr-books.service` binds Readarr only to
 that private address on port 8787. It creates no LXD proxy device.
 
+The named `eth0` override uses LXD's managed `network: lxdbr1` property plus
+the fixed address; it does not combine a profile-provided managed network with
+a separate `parent` bridge setting.
+
 The only media device is an idmapped `books` disk from `/plex/Books` to
 `/plex/Books`. `/plex/Audiobooks` is neither mounted nor configured as a root
 folder. This boundary is what keeps Written imports independent from the
