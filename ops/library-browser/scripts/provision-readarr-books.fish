@@ -29,7 +29,7 @@ end
 set -g READARR_BOOKS_LXC_COMMAND $lxc
 
 function has_local_device
-    set -l device_config (lxc_run config show $argv[1] --format json)
+    set -l device_config (lxc_run query "/1.0/instances/$argv[1]")
     or return 1
     printf '%s\n' $device_config | jq --exit-status --arg device "$argv[2]" '.devices | has($device)' >/dev/null
 end
@@ -42,16 +42,16 @@ function ensure_device_override
 end
 
 function lxd_boundary_is_safe
-    set -l config (lxc_run config show $argv[1] --expanded --format json)
+    set -l config (lxc_run query "/1.0/instances/$argv[1]?recursion=1")
     or return 1
     printf '%s\n' $config | jq --exit-status --arg address "$argv[2]" '
-        .config["security.privileged"] == "false" and
-        (.config | has("raw.idmap") | not) and
-        (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
-        (.devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
-        (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
-        ([.devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
-        ([.devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
+        .expanded_config["security.privileged"] == "false" and
+        (.expanded_config | has("raw.idmap") | not) and
+        (.expanded_devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
+        (.expanded_devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
+        (.expanded_devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
+        ([.expanded_devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
+        ([.expanded_devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
     ' >/dev/null
 end
 

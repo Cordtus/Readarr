@@ -193,6 +193,11 @@ overrides on later runs; rerunning it neither relaunches the container nor
 adds a second Books mount. It prints only pass/fail facts, never database
 values or credentials.
 
+The scripts use `lxc query /1.0/instances/readarr-books` for instance-local
+devices and the same endpoint with `?recursion=1` for `expanded_config` and
+`expanded_devices`. This avoids the unsupported `lxc config show --format
+json` path on the homeserver's LXC 6.9 client.
+
 Before enabling `readarr-books.service`, provisioning repeats the structural
 boundary check against LXD's expanded JSON. It refuses to enable the service
 if the inherited/default topology exposes an Audio or other host disk, any

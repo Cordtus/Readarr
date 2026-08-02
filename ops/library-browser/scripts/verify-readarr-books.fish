@@ -23,19 +23,19 @@ set -g READARR_BOOKS_LXC_COMMAND $lxc
 lxc_output info $instance >/dev/null 2>&1
 or fail 'instance does not exist'
 
-set -l config (lxc_output config show $instance --expanded --format json)
+set -l config (lxc_output query "/1.0/instances/$instance?recursion=1")
 or fail 'cannot read expanded LXD configuration'
 printf '%s\n' $config | jq --exit-status --arg address "$address" '
-    .config["security.privileged"] == "false" and
-    .config["limits.cpu"] == "2" and
-    .config["limits.memory"] == "2GiB" and
-    .config["boot.autostart"] == "true" and
-    (.config | has("raw.idmap") | not) and
-    (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
-    (.devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
-    (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
-    ([.devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
-    ([.devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
+    .expanded_config["security.privileged"] == "false" and
+    .expanded_config["limits.cpu"] == "2" and
+    .expanded_config["limits.memory"] == "2GiB" and
+    .expanded_config["boot.autostart"] == "true" and
+    (.expanded_config | has("raw.idmap") | not) and
+    (.expanded_devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
+    (.expanded_devices.eth0 | .type == "nic" and .network == "lxdbr1" and .["ipv4.address"] == $address) and
+    (.expanded_devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
+    ([.expanded_devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
+    ([.expanded_devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
 ' >/dev/null
 or fail 'LXD device or resource boundary is not exact'
 
