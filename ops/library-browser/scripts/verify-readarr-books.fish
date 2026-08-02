@@ -23,29 +23,20 @@ set -g READARR_BOOKS_LXC_COMMAND $lxc
 lxc_output info $instance >/dev/null 2>&1
 or fail 'instance does not exist'
 
-set -l config (lxc_output config show $instance --expanded)
+set -l config (lxc_output config show $instance --expanded --format json)
 or fail 'cannot read expanded LXD configuration'
-string match -rq 'security\.privileged: false' -- $config
-or fail 'instance must be unprivileged'
-string match -rq 'parent: lxdbr1' -- $config
-or fail 'instance must use lxdbr1'
-string match -rq "ipv4.address: $address" -- $config
-or fail 'instance must use the approved private address'
-string match -rq 'size: 20GiB' -- $config
-or fail 'root disk must be limited to 20GiB'
-string match -rq 'limits.cpu: 2' -- $config
-or fail 'CPU limit must be 2'
-string match -rq 'limits.memory: 2GiB' -- $config
-or fail 'memory limit must be 2GiB'
-string match -rq 'boot.autostart: true' -- $config
-or fail 'boot autostart must be enabled'
-string match -rq 'source: /plex/Books' -- $config
-and string match -rq 'path: /plex/Books' -- $config
-and string match -rq 'shift: true' -- $config
-or fail 'Books must be the idmapped media mount'
-if string match -rq '/plex/Audiobooks|proxy:' -- $config
-    fail 'Audio mount or public proxy device is forbidden'
-end
+printf '%s\n' $config | jq --exit-status --arg address "$address" '
+    .config["security.privileged"] == "false" and
+    .config["limits.cpu"] == "2" and
+    .config["limits.memory"] == "2GiB" and
+    .config["boot.autostart"] == "true" and
+    (.devices.root | .type == "disk" and .path == "/" and .size == "20GiB") and
+    (.devices.eth0 | .type == "nic" and .parent == "lxdbr1" and .["ipv4.address"] == $address) and
+    (.devices.books | .type == "disk" and .source == "/plex/Books" and .path == "/plex/Books" and .shift == "true") and
+    ([.devices | to_entries[] | select(.value.type == "proxy")] | length == 0) and
+    ([.devices | to_entries[] | select(.value.type == "disk" and .key != "root" and (.key != "books" or .value.source != "/plex/Books" or .value.path != "/plex/Books" or .value.shift != "true"))] | length == 0)
+' >/dev/null
+or fail 'LXD device or resource boundary is not exact'
 
 lxc_output exec $instance -- systemctl is-active --quiet readarr-books.service
 or fail 'Readarr service is not active'

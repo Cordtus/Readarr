@@ -28,6 +28,19 @@ end
 
 set -g READARR_BOOKS_LXC_COMMAND $lxc
 
+function has_local_device
+    set -l device_config (lxc_run config show $argv[1] --format json)
+    or return 1
+    printf '%s\n' $device_config | jq --exit-status --arg device "$argv[2]" '.devices | has($device)' >/dev/null
+end
+
+function ensure_device_override
+    if not has_local_device $argv[1] $argv[2]
+        lxc_run config device override $argv[1] $argv[2]
+        or return 1
+    end
+end
+
 if not lxc_run info $instance >/dev/null 2>&1
     lxc_run launch $image $instance
     or exit 1
@@ -38,11 +51,13 @@ lxc_run config set $instance security.privileged false; or exit 1
 lxc_run config set $instance limits.cpu 2; or exit 1
 lxc_run config set $instance limits.memory 2GiB; or exit 1
 lxc_run config set $instance boot.autostart true; or exit 1
-lxc_run config device override $instance root size=20GiB; or exit 1
+ensure_device_override $instance root; or exit 1
+lxc_run config device set $instance root size 20GiB; or exit 1
+ensure_device_override $instance eth0; or exit 1
 lxc_run config device set $instance eth0 parent lxdbr1; or exit 1
 lxc_run config device set $instance eth0 ipv4.address $address; or exit 1
 
-if not lxc_run config device get $instance books type >/dev/null 2>&1
+if not has_local_device $instance books
     lxc_run config device add $instance books disk source=/plex/Books path=/plex/Books shift=true
     or exit 1
 end

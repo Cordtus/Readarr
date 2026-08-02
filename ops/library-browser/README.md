@@ -179,8 +179,13 @@ placed in this repository, the command line, or the provisioning environment.
 privileged instance, the wrong bridge/address/resource limits, a missing
 idmapped Books mount, any Audio mount or proxy device, an inactive service or
 non-private listener, any root folder other than `/plex/Books`, and a Deluge
-client that removes completed torrents. It prints only pass/fail facts, never
-database values or credentials.
+client that removes completed torrents. It reads LXD's expanded JSON and
+checks the named `root` and `eth0` devices plus every disk/proxy device,
+rather than accepting a matching value from unrelated YAML. Provisioning
+overrides inherited `root` and `eth0` devices once, then reuses their local
+overrides on later runs; rerunning it neither relaunches the container nor
+adds a second Books mount. It prints only pass/fail facts, never database
+values or credentials.
 
 After the verifier passes, take an LXD snapshot. Rollback is limited to
 stopping and deleting `readarr-books` (or restoring that snapshot); it must
