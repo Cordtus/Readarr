@@ -159,4 +159,4 @@ lxc_run exec $instance -- systemctl enable --now readarr-books.service; or exit 
 
 printf '%s\n' 'Container service is installed, but catalogue credentials are intentionally absent.'
 printf '%s\n' 'Use the private Readarr API inside readarr-books to add only /plex/Books, the Written quality profile, and the existing Deluge client with RemoveCompletedDownloads=false.'
-printf '%s\n' 'Provide indexer and Deluge credentials separately inside the container; never copy them or host Readarr data into this instance.'
+printf '%s\n' 'An operator may configure the approved shared MAM and Deluge credentials through the private API; never copy host Readarr data into this instance.'

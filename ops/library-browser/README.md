@@ -181,13 +181,17 @@ fish /home/sv/library-browser/scripts/provision-readarr-books.fish
 fish /home/sv/library-browser/scripts/verify-readarr-books.fish
 ```
 
-Provisioning deliberately leaves all catalog credentials absent. Supply the
-MAM and Deluge credentials separately through the new instance's private
-local API, then configure exactly one root folder (`/plex/Books`), the Written
-quality profile, and its Deluge client. That client must have
+Provisioning deliberately leaves all catalogue credentials absent. An operator
+may configure the Written instance with the same approved MAM session and
+Deluge credentials as Audio through its private local API; those values must
+never be placed in this repository, the command line, or the provisioning
+environment. If either upstream service is configured as `localhost` on the
+host, the Written container must instead use its reachable `lxdbr1` address
+and preserve the service's full adapter path. Keep exactly one root folder
+(`/plex/Books`), the Written quality profile, and a distinct Deluge category
+(for example, `readarr-books`). Its client must have
 `RemoveCompletedDownloads: false`, so MAM torrents remain available to seed
-after imports. Credentials must never be copied from the Audio instance or
-placed in this repository, the command line, or the provisioning environment.
+after imports.
 
 `scripts/verify-readarr-books.fish` is read-only. It rejects a missing or
 privileged instance, the wrong bridge/address/resource limits, a missing
