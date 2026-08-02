@@ -93,9 +93,24 @@ end
 # lxdbr1 at the fixed private address.
 lxc_run exec $instance -- apt-get update; or exit 1
 lxc_run exec $instance -- apt-get install --yes ca-certificates curl libicu72 sqlite3; or exit 1
-lxc_run exec $instance -- id readarr
-or lxc_run exec $instance -- useradd --system --home-dir /var/lib/readarr --create-home --shell /usr/sbin/nologin readarr
-or exit 1
+set -l readarr_uid (lxc_run exec $instance -- id -u readarr)
+if test $status -eq 0
+    if test "$readarr_uid" != 1000
+        if lxc_run exec $instance -- getent passwd 1000 >/dev/null
+            printf '%s\n' 'Cannot align the Readarr user with the Books mount: container UID 1000 is already assigned.' >&2
+            exit 1
+        end
+        lxc_run exec $instance -- usermod --uid 1000 readarr
+        or exit 1
+    end
+else
+    if lxc_run exec $instance -- getent passwd 1000 >/dev/null
+        printf '%s\n' 'Cannot create the Readarr user: container UID 1000 is already assigned.' >&2
+        exit 1
+    end
+    lxc_run exec $instance -- useradd --system --uid 1000 --home-dir /var/lib/readarr --create-home --shell /usr/sbin/nologin readarr
+    or exit 1
+end
 lxc_run exec $instance -- mkdir --parents /opt/Readarr /var/lib/readarr; or exit 1
 set -l bundle_entries $bundle/*
 if test (count $bundle_entries) -eq 0

@@ -40,6 +40,8 @@ printf '%s\n' '  if string match -rq "recursion=1" -- "$argv[2]"; set -l root "{
 printf '%s\n' 'end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = file; and test "$argv[2]" = push; and test "$argv[3]" = -; and string match -rq "readarr-books\\.service\\z" -- "$argv[4]"; cat >$READARR_BOOKS_TEST_UNIT; exit 0; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = file; and test "$argv[2]" = push; and string match -rq "/Readarr\$" -- "$argv[4]"; touch $READARR_BOOKS_TEST_EXECUTABLE; exit 0; end' >>$fake_lxc
+printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = id; and test "$argv[5]" = -u; printf "%s\\n" 995; exit 0; end' >>$fake_lxc
+printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = getent; and test "$argv[5]" = passwd; and test "$argv[6]" = 1000; exit 1; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = test; and test "$argv[5]" = -x; test -e $READARR_BOOKS_TEST_EXECUTABLE; and exit 0; or exit 1; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = ss; printf "%s\\n" "LISTEN 0 4096 10.114.28.186:8787 0.0.0.0:*"; exit 0; end' >>$fake_lxc
 printf '%s\n' 'if test "$argv[1]" = exec; and test "$argv[4]" = sqlite3; if string match -rq RootFolders -- "$argv[7]"; printf "%s\\n" /plex/Books; else; printf "%s\\n" 0; end; exit 0; end' >>$fake_lxc
@@ -60,6 +62,8 @@ test -e $executable
 or begin; printf '%s\n' 'Readarr executable was not installed at /opt/Readarr/Readarr' >&2; exit 1; end
 string match -rq '^Environment=Readarr__Server__BindAddress=10\.114\.28\.186$' < $unit
 or begin; printf '%s\n' 'service does not configure Readarr to bind only to its private address' >&2; exit 1; end
+string match -rq '^exec readarr-books -- usermod --uid 1000 readarr$' < $log
+or begin; printf '%s\n' 'provisioning did not align the Readarr service user with the idmapped Books mount' >&2; exit 1; end
 
 env READARR_BOOKS_LXC=$fake_lxc READARR_BOOKS_TEST_LOG=$log READARR_BOOKS_TEST_STATE=$state READARR_BOOKS_TEST_DEVICES=$devices READARR_BOOKS_TEST_EXECUTABLE=$executable READARR_BOOKS_TEST_UNIT=$unit READARR_BOOKS_BUNDLE=$bundle fish --no-config "$script_dir/provision-readarr-books.fish"
 or exit 1

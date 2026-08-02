@@ -162,8 +162,10 @@ a separate `parent` bridge setting.
 
 The only media device is an idmapped `books` disk from `/plex/Books` to
 `/plex/Books`. `/plex/Audiobooks` is neither mounted nor configured as a root
-folder. This boundary is what keeps Written imports independent from the
-existing Audio Readarr instance.
+folder. The contained `readarr` service account is UID 1000, matching the
+owner shown by that idmapped Books mount; this lets Readarr import Written
+books without changing host media permissions. This boundary is what keeps
+Written imports independent from the existing Audio Readarr instance.
 
 Run this on the homeserver only after providing a separately built, already
 trusted Readarr application bundle. The bundle is application files only; the
