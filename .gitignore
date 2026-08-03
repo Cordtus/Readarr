@@ -11,6 +11,9 @@ src/**/[Oo]bj/
 *.user
 *.sln.docstates
 .vs/
+docs/
+ops/library-browser
+distribution/
 
 # Build results
 *_i.c
