@@ -282,6 +282,46 @@ namespace NzbDrone.Core.Test.MediaFiles.BookImport
         }
 
         [Test]
+        public void should_mark_release_forced_when_book_override_is_set()
+        {
+            GivenAugmentationSuccess();
+            GivenSpecifications(_bookpass1);
+            GivenSpecifications(_pass1);
+
+            LocalEdition capturedRelease = null;
+            _bookpass1.Setup(c => c.IsSatisfiedBy(It.IsAny<LocalEdition>(), It.IsAny<DownloadClientItem>()))
+                .Callback<LocalEdition, DownloadClientItem>((release, downloadClientItem) => capturedRelease = release)
+                .Returns(Decision.Accept());
+
+            var idOverrides = new IdentificationOverrides
+            {
+                Author = _author,
+                Book = _book
+            };
+
+            Subject.GetImportDecisions(_fileInfos, idOverrides, null, _idConfig);
+
+            capturedRelease.Forced.Should().BeTrue();
+        }
+
+        [Test]
+        public void should_not_mark_release_forced_when_no_book_override_is_set()
+        {
+            GivenAugmentationSuccess();
+            GivenSpecifications(_bookpass1);
+            GivenSpecifications(_pass1);
+
+            LocalEdition capturedRelease = null;
+            _bookpass1.Setup(c => c.IsSatisfiedBy(It.IsAny<LocalEdition>(), It.IsAny<DownloadClientItem>()))
+                .Callback<LocalEdition, DownloadClientItem>((release, downloadClientItem) => capturedRelease = release)
+                .Returns(Decision.Accept());
+
+            Subject.GetImportDecisions(_fileInfos, null, null, _idConfig);
+
+            capturedRelease.Forced.Should().BeFalse();
+        }
+
+        [Test]
         public void should_have_same_number_of_rejections_as_specs_that_failed()
         {
             GivenAugmentationSuccess();

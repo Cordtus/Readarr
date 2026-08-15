@@ -268,6 +268,63 @@ namespace NzbDrone.Core.Test.MediaFiles
         }
 
         [Test]
+        public void should_pass_single_book_override_to_import_decision_maker()
+        {
+            GivenValidAuthor();
+
+            var book = Builder<Book>.CreateNew().Build();
+            var books = new List<Book> { book };
+
+            IdentificationOverrides capturedOverrides = null;
+            Mocker.GetMock<IMakeImportDecision>()
+                .Setup(v => v.GetImportDecisions(It.IsAny<List<IFileInfo>>(), It.IsAny<IdentificationOverrides>(), It.IsAny<ImportDecisionMakerInfo>(), It.IsAny<ImportDecisionMakerConfig>()))
+                .Callback<List<IFileInfo>, IdentificationOverrides, ImportDecisionMakerInfo, ImportDecisionMakerConfig>((files, overrides, info, config) => capturedOverrides = overrides)
+                .Returns(new List<ImportDecision<LocalBook>>());
+
+            Subject.ProcessPath(_droneFactory, ImportMode.Auto, _trackedDownload.RemoteBook.Author, _trackedDownload.DownloadItem, books);
+
+            capturedOverrides.Book.Should().Be(book);
+        }
+
+        [Test]
+        public void should_not_pass_book_override_when_multiple_books()
+        {
+            GivenValidAuthor();
+
+            var books = new List<Book>
+            {
+                Builder<Book>.CreateNew().Build(),
+                Builder<Book>.CreateNew().Build()
+            };
+
+            IdentificationOverrides capturedOverrides = null;
+            Mocker.GetMock<IMakeImportDecision>()
+                .Setup(v => v.GetImportDecisions(It.IsAny<List<IFileInfo>>(), It.IsAny<IdentificationOverrides>(), It.IsAny<ImportDecisionMakerInfo>(), It.IsAny<ImportDecisionMakerConfig>()))
+                .Callback<List<IFileInfo>, IdentificationOverrides, ImportDecisionMakerInfo, ImportDecisionMakerConfig>((files, overrides, info, config) => capturedOverrides = overrides)
+                .Returns(new List<ImportDecision<LocalBook>>());
+
+            Subject.ProcessPath(_droneFactory, ImportMode.Auto, _trackedDownload.RemoteBook.Author, _trackedDownload.DownloadItem, books);
+
+            capturedOverrides.Book.Should().BeNull();
+        }
+
+        [Test]
+        public void should_not_pass_book_override_when_no_books()
+        {
+            GivenValidAuthor();
+
+            IdentificationOverrides capturedOverrides = null;
+            Mocker.GetMock<IMakeImportDecision>()
+                .Setup(v => v.GetImportDecisions(It.IsAny<List<IFileInfo>>(), It.IsAny<IdentificationOverrides>(), It.IsAny<ImportDecisionMakerInfo>(), It.IsAny<ImportDecisionMakerConfig>()))
+                .Callback<List<IFileInfo>, IdentificationOverrides, ImportDecisionMakerInfo, ImportDecisionMakerConfig>((files, overrides, info, config) => capturedOverrides = overrides)
+                .Returns(new List<ImportDecision<LocalBook>>());
+
+            Subject.ProcessPath(_droneFactory, ImportMode.Auto, _trackedDownload.RemoteBook.Author, _trackedDownload.DownloadItem, new List<Book>());
+
+            capturedOverrides.Book.Should().BeNull();
+        }
+
+        [Test]
         public void should_not_delete_if_no_files_were_imported()
         {
             GivenValidAuthor();
