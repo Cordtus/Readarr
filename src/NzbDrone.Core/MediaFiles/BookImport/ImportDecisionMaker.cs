@@ -162,6 +162,7 @@ namespace NzbDrone.Core.MediaFiles.BookImport
                 // in case it's a new author
                 EnsureData(release);
                 release.NewDownload = config.NewDownload;
+                release.Forced = idOverrides.Book != null;
 
                 var releaseDecision = GetDecision(release, itemInfo.DownloadClientItem);
 

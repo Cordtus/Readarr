@@ -20,7 +20,7 @@ namespace NzbDrone.Core.MediaFiles
     public interface IDownloadedBooksImportService
     {
         List<ImportResult> ProcessRootFolder(IDirectoryInfo directoryInfo);
-        List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Author author = null, DownloadClientItem downloadClientItem = null);
+        List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Author author = null, DownloadClientItem downloadClientItem = null, List<Book> books = null);
         bool ShouldDeleteFolder(IDirectoryInfo directoryInfo);
     }
 
@@ -76,7 +76,7 @@ namespace NzbDrone.Core.MediaFiles
             return results;
         }
 
-        public List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Author author = null, DownloadClientItem downloadClientItem = null)
+        public List<ImportResult> ProcessPath(string path, ImportMode importMode = ImportMode.Auto, Author author = null, DownloadClientItem downloadClientItem = null, List<Book> books = null)
         {
             _logger.Debug("Processing path: {0}", path);
 
@@ -86,10 +86,10 @@ namespace NzbDrone.Core.MediaFiles
 
                 if (author == null)
                 {
-                    return ProcessFolder(directoryInfo, importMode, downloadClientItem);
+                    return ProcessFolder(directoryInfo, importMode, downloadClientItem, books);
                 }
 
-                return ProcessFolder(directoryInfo, importMode, author, downloadClientItem);
+                return ProcessFolder(directoryInfo, importMode, author, downloadClientItem, books);
             }
 
             if (_diskProvider.FileExists(path))
@@ -98,10 +98,10 @@ namespace NzbDrone.Core.MediaFiles
 
                 if (author == null)
                 {
-                    return ProcessFile(fileInfo, importMode, downloadClientItem);
+                    return ProcessFile(fileInfo, importMode, downloadClientItem, books);
                 }
 
-                return ProcessFile(fileInfo, importMode, author, downloadClientItem);
+                return ProcessFile(fileInfo, importMode, author, downloadClientItem, books);
             }
 
             LogInaccessiblePathError(path);
@@ -153,15 +153,15 @@ namespace NzbDrone.Core.MediaFiles
             }
         }
 
-        private List<ImportResult> ProcessFolder(IDirectoryInfo directoryInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
+        private List<ImportResult> ProcessFolder(IDirectoryInfo directoryInfo, ImportMode importMode, DownloadClientItem downloadClientItem, List<Book> books = null)
         {
             var cleanedUpName = GetCleanedUpFolderName(directoryInfo.Name);
             var author = _parsingService.GetAuthor(cleanedUpName);
 
-            return ProcessFolder(directoryInfo, importMode, author, downloadClientItem);
+            return ProcessFolder(directoryInfo, importMode, author, downloadClientItem, books);
         }
 
-        private List<ImportResult> ProcessFolder(IDirectoryInfo directoryInfo, ImportMode importMode, Author author, DownloadClientItem downloadClientItem)
+        private List<ImportResult> ProcessFolder(IDirectoryInfo directoryInfo, ImportMode importMode, Author author, DownloadClientItem downloadClientItem, List<Book> books = null)
         {
             if (_authorService.AuthorPathExists(directoryInfo.FullName))
             {
@@ -209,7 +209,8 @@ namespace NzbDrone.Core.MediaFiles
 
             var idOverrides = new IdentificationOverrides
             {
-                Author = author
+                Author = author,
+                Book = books != null && books.Count == 1 ? books[0] : null
             };
             var idInfo = new ImportDecisionMakerInfo
             {
@@ -252,7 +253,7 @@ namespace NzbDrone.Core.MediaFiles
             return importResults;
         }
 
-        private List<ImportResult> ProcessFile(IFileInfo fileInfo, ImportMode importMode, DownloadClientItem downloadClientItem)
+        private List<ImportResult> ProcessFile(IFileInfo fileInfo, ImportMode importMode, DownloadClientItem downloadClientItem, List<Book> books = null)
         {
             var author = _parsingService.GetAuthor(Path.GetFileNameWithoutExtension(fileInfo.Name));
 
@@ -266,10 +267,10 @@ namespace NzbDrone.Core.MediaFiles
                        };
             }
 
-            return ProcessFile(fileInfo, importMode, author, downloadClientItem);
+            return ProcessFile(fileInfo, importMode, author, downloadClientItem, books);
         }
 
-        private List<ImportResult> ProcessFile(IFileInfo fileInfo, ImportMode importMode, Author author, DownloadClientItem downloadClientItem)
+        private List<ImportResult> ProcessFile(IFileInfo fileInfo, ImportMode importMode, Author author, DownloadClientItem downloadClientItem, List<Book> books = null)
         {
             if (Path.GetFileNameWithoutExtension(fileInfo.Name).StartsWith("._"))
             {
@@ -294,7 +295,8 @@ namespace NzbDrone.Core.MediaFiles
 
             var idOverrides = new IdentificationOverrides
             {
-                Author = author
+                Author = author,
+                Book = books != null && books.Count == 1 ? books[0] : null
             };
             var idInfo = new ImportDecisionMakerInfo
             {

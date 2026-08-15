@@ -21,6 +21,12 @@ namespace NzbDrone.Core.MediaFiles.BookImport.Specifications
             double dist;
             string reasons;
 
+            if (item.Forced)
+            {
+                _logger.Debug($"Forced match accepted for {item}");
+                return Decision.Accept();
+            }
+
             // strict when a new download
             if (item.NewDownload)
             {
