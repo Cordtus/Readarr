@@ -144,5 +144,9 @@
   "volta": {
     "node": "20.11.1",
     "yarn": "1.22.19"
+  },
+  "resolutions": {
+    "@types/react": "18.2.79",
+    "@types/react-dom": "18.2.25"
   }
 }
