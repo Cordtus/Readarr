@@ -114,6 +114,13 @@ namespace NzbDrone.Core.Books
             if (book == null)
             {
                 data = GetSkyhookData(local);
+
+                if (data == null)
+                {
+                    _logger.Debug("{0} not found in metadata, leaving the local record as-is", local.Title);
+                    return result;
+                }
+
                 book = data.Books.Value.SingleOrDefault(x => x.ForeignBookId == local.ForeignBookId);
             }
 
@@ -357,6 +364,11 @@ namespace NzbDrone.Core.Books
         public bool RefreshBookInfo(Book book)
         {
             var data = GetSkyhookData(book);
+
+            if (data == null)
+            {
+                return false;
+            }
 
             return RefreshBookInfo(book, data.Books, data, false);
         }

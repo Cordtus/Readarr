@@ -13,6 +13,7 @@ namespace NzbDrone.Core.Books
     public interface IAddBookService
     {
         Book AddBook(Book book, bool doRefresh = true);
+        Book AddManualBook(Book book, bool doRefresh = false);
         List<Book> AddBooks(List<Book> books, bool doRefresh = true);
     }
 
@@ -74,6 +75,33 @@ namespace NzbDrone.Core.Books
 
             book.Author = dbAuthor;
             book.AuthorMetadataId = dbAuthor.AuthorMetadataId;
+            _bookService.AddBook(book, doRefresh);
+
+            return book;
+        }
+
+        public Book AddManualBook(Book book, bool doRefresh = false)
+        {
+            if (book == null || book.AuthorMetadataId == 0)
+            {
+                throw new InvalidOperationException("Cannot add a manual book without an author");
+            }
+
+            if (book.Editions.Value == null || !book.Editions.Value.Any())
+            {
+                throw new InvalidOperationException("Cannot add a manual book without an edition");
+            }
+
+            book.Added = DateTime.UtcNow;
+            book.AddOptions ??= new AddBookOptions();
+            book.AddOptions.AddType = BookAddType.Manual;
+
+            book.Editions.Value.ForEach(x => x.Monitored = false);
+            var edition = book.Editions.Value.First();
+            edition.Monitored = true;
+            edition.ManualAdd = true;
+
+            _importListExclusionService.Delete(book.AuthorMetadata.Value.ForeignAuthorId);
             _bookService.AddBook(book, doRefresh);
 
             return book;
