@@ -49,6 +49,18 @@ namespace NzbDrone.Core.MediaFiles.BookImport.Identification
                 titleOptions.Add(StripSeriesRegex.Replace(titleOptions[0]));
             }
 
+            // rreading-glasses sets the work title to "Title: Subtitle" for series
+            // works and duplicate titles, while the edition title is usually bare.
+            // Without this option a file tagged with the subtitle scores ~0.59
+            // against the edition title and is rejected at the 0.20 gate.
+            // Deliberately not adding the work's *main* title: that was removed in
+            // 33e1c4a53 so a file cannot match the wrong edition of the work.
+            var bookTitle = edition.Book.Value.Title;
+            if (bookTitle.IsNotNullOrWhiteSpace() && !titleOptions.Contains(bookTitle))
+            {
+                titleOptions.Add(bookTitle);
+            }
+
             var (maintitle, _) = edition.Title.SplitBookTitle(edition.Book.Value.AuthorMetadata.Value.Name);
             if (!titleOptions.Contains(maintitle))
             {

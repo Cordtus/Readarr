@@ -1,7 +1,11 @@
 using System.Collections.Generic;
+using System.Linq;
 using FluentAssertions;
 using NUnit.Framework;
+using NzbDrone.Core.Books;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.MediaFiles.BookImport.Identification;
+using NzbDrone.Core.Parser.Model;
 using NzbDrone.Test.Common;
 
 namespace NzbDrone.Core.Test.MediaFiles.BookImport.Identification
@@ -34,6 +38,41 @@ namespace NzbDrone.Core.Test.MediaFiles.BookImport.Identification
             authors.Should().Contain("First2 Last2");
             authors.Should().Contain("Last, First");
             authors.Should().Contain("Last2, First2");
+        }
+
+        [Test]
+        public void should_match_a_file_title_with_subtitle_to_the_work_title()
+        {
+            var book = new Book
+            {
+                Title = "Gardens of the Moon: A Tale of the Malazan Empire",
+                AuthorMetadata = new LazyLoaded<AuthorMetadata>(
+                    new AuthorMetadata { Name = "Steven Erikson" })
+            };
+
+            var edition = new Edition
+            {
+                Title = "Gardens of the Moon",
+                Book = new LazyLoaded<Book>(book)
+            };
+
+            var localBooks = new List<LocalBook>
+            {
+                new LocalBook
+                {
+                    Path = "book.mp3",
+                    FileTrackInfo = new ParsedTrackInfo
+                    {
+                        BookTitle = book.Title,
+                        Authors = new List<string> { "Steven Erikson" }
+                    }
+                }
+            };
+
+            var distance = DistanceCalculator.BookDistance(localBooks, edition);
+
+            distance.Penalties["book"].Single().Should().BeLessThan(0.01);
+            distance.NormalizedDistance().Should().BeLessThan(0.20);
         }
 
         [Test]
