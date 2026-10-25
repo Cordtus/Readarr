@@ -31,6 +31,8 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
             Converters = { new STJUtcConverter() }
         };
 
+        private static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(30);
+
         private readonly IHttpClient _httpClient;
         private readonly ICachedHttpResponseService _cachedHttpClient;
         private readonly IGoodreadsSearchProxy _goodreadsSearchProxy;
@@ -76,6 +78,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 .AddQueryParam("since", startTime.ToString("o"))
                 .Build();
 
+            httpRequest.RequestTimeout = MetadataTimeout;
             httpRequest.SuppressHttpError = true;
 
             var httpResponse = _httpClient.Get<RecentUpdatesResource>(httpRequest);
@@ -297,8 +300,33 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 }
                 catch (HttpException ex)
                 {
-                    _logger.Warn(ex);
-                    throw new BookInfoException("Search for '{0}' failed. Unable to communicate with ReadarrAPI, returning status code: {1}.", ex, query, ex.Response.StatusCode);
+                    _logger.Warn(ex, "Bulk metadata search failed; retrying with per-author metadata");
+
+                    var workIds = result
+                        .Select(x => x.WorkId)
+                        .Where(x => x > 0)
+                        .Select(x => x.ToString())
+                        .ToHashSet();
+
+                    var fallback = result
+                        .Where(x => x.Author != null && x.Author.Id > 0)
+                        .Select(x => x.Author.Id)
+                        .Distinct()
+                        .SelectMany(SearchByGoodreadsAuthorId)
+                        .Where(x => workIds.Contains(x.ForeignBookId))
+                        .ToList();
+
+                    foreach (var workId in workIds.Except(fallback.Select(x => x.ForeignBookId)))
+                    {
+                        fallback.AddRange(SearchByGoodreadsWorkId(int.Parse(workId)));
+                    }
+
+                    if (fallback.Any())
+                    {
+                        return fallback;
+                    }
+
+                    throw new BookInfoException("Search for '{0}' failed. The metadata provider is unavailable.", ex, query);
                 }
                 catch (Exception e)
                 {
@@ -393,6 +421,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                     .SetSegment("route", $"book/{id}")
                     .Build();
 
+                httpRequest.RequestTimeout = MetadataTimeout;
                 httpRequest.SuppressHttpError = true;
 
                 // we expect a redirect
@@ -487,6 +516,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                 httpRequest.SetContent(ids.ToJson());
                 httpRequest.ContentSummary = ids.ToJson(Formatting.None);
 
+                httpRequest.RequestTimeout = MetadataTimeout;
                 httpRequest.AllowAutoRedirect = true;
                 httpRequest.SuppressHttpErrorStatusCodes = new[] { HttpStatusCode.TooManyRequests };
 
@@ -612,6 +642,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                     .SetSegment("route", $"author/{foreignAuthorId}")
                     .Build();
 
+                httpRequest.RequestTimeout = MetadataTimeout;
                 httpRequest.AllowAutoRedirect = true;
                 httpRequest.SuppressHttpError = true;
 
@@ -669,6 +700,7 @@ namespace NzbDrone.Core.MetadataSource.BookInfo
                     .SetSegment("route", $"work/{foreignBookId}")
                     .Build();
 
+                httpRequest.RequestTimeout = MetadataTimeout;
                 httpRequest.SuppressHttpError = true;
 
                 // this may redirect to an author
