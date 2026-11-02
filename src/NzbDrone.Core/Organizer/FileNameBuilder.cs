@@ -76,17 +76,17 @@ namespace NzbDrone.Core.Organizer
                 namingConfig = _namingConfigService.GetConfig();
             }
 
-            if (!namingConfig.RenameBooks)
+            var pattern = namingConfig.StandardBookFormat;
+
+            if (!namingConfig.RenameBooks && pattern.IsNullOrWhiteSpace())
             {
                 return GetOriginalFileName(bookFile);
             }
 
-            if (namingConfig.StandardBookFormat.IsNullOrWhiteSpace())
+            if (pattern.IsNullOrWhiteSpace())
             {
                 throw new NamingFormatException("File name format cannot be empty");
             }
-
-            var pattern = namingConfig.StandardBookFormat;
 
             var tokenHandlers = new Dictionary<string, Func<TokenMatch, string>>(FileNameBuilderTokenEqualityComparer.Instance);
 
@@ -98,9 +98,32 @@ namespace NzbDrone.Core.Organizer
             AddCustomFormats(tokenHandlers, author, bookFile, customFormats);
 
             var splitPatterns = pattern.Split(new char[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (!namingConfig.RenameBooks)
+            {
+                // Keep the release's own file name, but still honour the folder
+                // part of the naming pattern: dropping only the file component
+                // keeps multi-file and chapterized imports in <Author>/<Book>
+                // instead of scattering them over the author root.
+                var folders = RenderComponents(
+                    splitPatterns.Take(splitPatterns.Length - 1),
+                    tokenHandlers,
+                    namingConfig);
+                folders.Add(GetOriginalFileName(bookFile));
+
+                return Path.Combine(folders.ToArray());
+            }
+
+            var components = RenderComponents(splitPatterns, tokenHandlers, namingConfig);
+
+            return Path.Combine(components.ToArray());
+        }
+
+        private List<string> RenderComponents(IEnumerable<string> patterns, Dictionary<string, Func<TokenMatch, string>> tokenHandlers, NamingConfig namingConfig)
+        {
             var components = new List<string>();
 
-            foreach (var s in splitPatterns)
+            foreach (var s in patterns)
             {
                 var splitPattern = s;
 
@@ -116,7 +139,7 @@ namespace NzbDrone.Core.Organizer
                 }
             }
 
-            return Path.Combine(components.ToArray());
+            return components;
         }
 
         public string BuildBookFilePath(Author author, Edition edition, string fileName, string extension)
