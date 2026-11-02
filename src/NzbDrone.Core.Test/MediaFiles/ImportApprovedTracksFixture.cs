@@ -27,6 +27,7 @@ namespace NzbDrone.Core.Test.MediaFiles
         private List<ImportDecision<LocalBook>> _rejectedDecisions;
         private List<ImportDecision<LocalBook>> _approvedDecisions;
 
+        private Edition _edition;
         private DownloadClientItem _downloadClientItem;
         private DownloadClientItemClientInfo _clientInfo;
 
@@ -51,6 +52,7 @@ namespace NzbDrone.Core.Test.MediaFiles
                 .Build();
 
             book.Editions = new List<Edition> { edition };
+            _edition = edition;
 
             var rootFolder = Builder<RootFolder>.CreateNew()
                 .With(r => r.IsCalibreLibrary = false)
@@ -101,6 +103,16 @@ namespace NzbDrone.Core.Test.MediaFiles
             Subject.Import(_rejectedDecisions, false).Where(i => i.Result == ImportResultType.Imported).Should().BeEmpty();
 
             Mocker.GetMock<IMediaFileService>().Verify(v => v.Add(It.IsAny<BookFile>()), Times.Never());
+        }
+
+        [Test]
+        public void should_import_when_the_book_has_no_monitored_edition()
+        {
+            _edition.Monitored = false;
+
+            Subject.Import(_approvedDecisions, false)
+                   .Where(i => i.Result == ImportResultType.Imported)
+                   .Should().HaveCount(1);
         }
 
         [Test]

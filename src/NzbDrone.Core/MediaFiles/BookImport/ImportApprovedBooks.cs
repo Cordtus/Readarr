@@ -324,10 +324,14 @@ namespace NzbDrone.Core.MediaFiles.BookImport
             foreach (var bookImport in bookImports)
             {
                 var book = bookImport.First().ImportDecision.Item.Book;
-                var edition = book.Editions.Value.Single(x => x.Monitored);
+                // A book without a monitored edition used to throw here and abort
+                // the whole import after the trackfiles were already inserted,
+                // leaving books without their file count.
+                var edition = book.Editions.Value.SingleOrDefault(x => x.Monitored)
+                              ?? book.Editions.Value.FirstOrDefault();
                 var author = bookImport.First().ImportDecision.Item.Author;
 
-                if (bookImport.Where(e => e.Errors.Count == 0).ToList().Count > 0 && author != null && book != null)
+                if (edition != null && bookImport.Where(e => e.Errors.Count == 0).ToList().Count > 0 && author != null && book != null)
                 {
                     _eventAggregator.PublishEvent(new BookImportedEvent(
                         author,
