@@ -1,8 +1,8 @@
+using System;
+using System.IO;
+using NetVips;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats.Jpeg;
-using SixLabors.ImageSharp.Processing;
 
 namespace NzbDrone.Core.MediaCover
 {
@@ -13,6 +13,8 @@ namespace NzbDrone.Core.MediaCover
 
     public class ImageResizer : IImageResizer
     {
+        private const int JpegQuality = 92;
+
         private readonly IDiskProvider _diskProvider;
         private readonly bool _enabled;
 
@@ -21,12 +23,6 @@ namespace NzbDrone.Core.MediaCover
             _diskProvider = diskProvider;
 
             _enabled = true;
-
-            // Thumbnails don't need super high quality
-            SixLabors.ImageSharp.Configuration.Default.ImageFormatsManager.SetEncoder(JpegFormat.Instance, new JpegEncoder
-            {
-                Quality = 92
-            });
         }
 
         public void Resize(string source, string destination, int height)
@@ -38,9 +34,17 @@ namespace NzbDrone.Core.MediaCover
 
             try
             {
-                using var image = Image.Load(source);
-                image.Mutate(x => x.Resize(0, height));
-                image.Save(destination);
+                using var image = Image.NewFromFile(source);
+                using var resized = image.Resize((double)height / image.Height);
+
+                if (IsJpeg(destination))
+                {
+                    resized.WriteToFile(destination, new VOption { { "Q", JpegQuality } });
+                }
+                else
+                {
+                    resized.WriteToFile(destination);
+                }
             }
             catch
             {
@@ -51,6 +55,12 @@ namespace NzbDrone.Core.MediaCover
 
                 throw;
             }
+        }
+
+        private static bool IsJpeg(string path)
+        {
+            return string.Equals(Path.GetExtension(path), ".jpg", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(Path.GetExtension(path), ".jpeg", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

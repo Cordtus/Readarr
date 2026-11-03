@@ -16,7 +16,7 @@ using NzbDrone.Core.MediaFiles.Commands;
 using NzbDrone.Core.Parser.Model;
 using NzbDrone.Core.Qualities;
 using NzbDrone.Core.RootFolders;
-using PdfSharpCore.Pdf.IO;
+using UglyToad.PdfPig;
 using VersOne.Epub;
 using VersOne.Epub.Schema;
 
@@ -355,14 +355,13 @@ namespace NzbDrone.Core.MediaFiles
 
             try
             {
-                var book = PdfReader.Open(file, PdfDocumentOpenMode.InformationOnly);
-                if (book.Info != null)
-                {
-                    result.Authors = new List<string> { book.Info.Author };
-                    result.BookTitle = book.Info.Title;
+                using var document = PdfDocument.Open(file);
+                var info = document.Information;
 
-                    _logger.Trace(book.Info.ToJson());
-                }
+                result.Authors = new List<string> { info.Author };
+                result.BookTitle = info.Title;
+
+                _logger.Trace(info.ToJson());
             }
             catch (Exception e)
             {

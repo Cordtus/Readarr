@@ -6,7 +6,7 @@ using NUnit.Framework;
 using NzbDrone.Common.Disk;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Test.Framework;
-using SixLabors.ImageSharp;
+using NetVips;
 
 namespace NzbDrone.Core.Test.MediaCoverTests
 {
@@ -41,7 +41,7 @@ namespace NzbDrone.Core.Test.MediaCoverTests
             fileInfo.Exists.Should().BeTrue();
             fileInfo.Length.Should().BeInRange(1000, 30000);
 
-            using (var image = Image.Load(resizedFile))
+            using (var image = Image.NewFromFile(resizedFile))
             {
                 image.Height.Should().Be(170);
                 image.Width.Should().Be(170);
