@@ -282,6 +282,32 @@ namespace NzbDrone.Core.Datastore
             ParseEnumerableContains(expression);
         }
 
+
+        private static Expression StripConversion(Expression expression)
+        {
+            while (true)
+            {
+                if (expression is UnaryExpression unary &&
+                    (expression.NodeType == ExpressionType.Convert ||
+                     expression.NodeType == ExpressionType.ConvertChecked))
+                {
+                    expression = unary.Operand;
+                    continue;
+                }
+
+                // Arrays bind to the span overloads through an op_Implicit call.
+                if (expression is MethodCallExpression call &&
+                    call.Method.Name == "op_Implicit" &&
+                    call.Arguments.Count == 1)
+                {
+                    expression = call.Arguments[0];
+                    continue;
+                }
+
+                return expression;
+            }
+        }
+
         private void ParseEnumerableContains(MethodCallExpression body)
         {
             // Fish out the list and the item to compare
@@ -296,14 +322,16 @@ namespace NzbDrone.Core.Datastore
             }
             else
             {
-                // Static method
-                // Must be Enumerable.Contains(source, item)
-                if (body.Method.DeclaringType != typeof(Enumerable) || body.Arguments.Count != 2)
+                // Static method: Enumerable.Contains(source, item), or the
+                // span-based MemoryExtensions.Contains the newer compiler picks
+                // for arrays. Unwrap the span conversion so the list stays a
+                // constant the parameter builder can read.
+                if (body.Method.Name != "Contains" || body.Arguments.Count < 2)
                 {
-                    throw new NotSupportedException("Unexpected form of Enumerable.Contains");
+                    throw new NotSupportedException($"Unexpected form of Enumerable.Contains: {body.Method.DeclaringType}.{body.Method.Name}/{body.Arguments.Count}");
                 }
 
-                list = body.Arguments[0];
+                list = StripConversion(body.Arguments[0]);
                 item = body.Arguments[1];
             }
 

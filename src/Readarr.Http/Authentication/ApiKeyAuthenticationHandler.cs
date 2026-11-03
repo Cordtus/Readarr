@@ -28,9 +28,8 @@ namespace Readarr.Http.Authentication
         public ApiKeyAuthenticationHandler(IOptionsMonitor<ApiKeyAuthenticationOptions> options,
             ILoggerFactory logger,
             UrlEncoder encoder,
-            ISystemClock clock,
             IConfigFileProvider config)
-            : base(options, logger, encoder, clock)
+            : base(options, logger, encoder)
         {
             _apiKey = config.ApiKey;
         }
@@ -81,7 +80,13 @@ namespace Readarr.Http.Authentication
 
         protected override Task HandleChallengeAsync(AuthenticationProperties properties)
         {
-            Response.StatusCode = 401;
+            // The UI scheme may have already redirected to the login page; a
+            // 401 here would overwrite that redirect with an error.
+            if (!Response.Headers.ContainsKey("Location"))
+            {
+                Response.StatusCode = 401;
+            }
+
             return Task.CompletedTask;
         }
 

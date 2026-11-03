@@ -10,6 +10,7 @@ using Readarr.Http.Frontend.Mappers;
 namespace Readarr.Http.Frontend
 {
     [Authorize(Policy="UI")]
+    [AllowCookieRedirect]
     [ApiController]
     public class StaticResourceController : Controller
     {

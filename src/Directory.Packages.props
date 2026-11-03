@@ -1,9 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <PropertyGroup>
+    <!-- ImageSharp 3.1.12 is the last release usable without a Six Labors
+         commercial license key (4.x fails the build without one). Its residual
+         audit advisories are therefore suppressed; re-check when a licensed
+         build or a different imaging library is available. -->
+    <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+    <!-- Pin transitive versions so vulnerable or EOL pulls cannot come back. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="AutoFixture" Version="4.17.0" />
     <PackageVersion Include="coverlet.collector" Version="3.0.4-preview.27.ge7cb7c3b40" PrivateAssets="all" />
-    <PackageVersion Include="Dapper" Version="2.0.151" />
+    <PackageVersion Include="Dapper" Version="2.1.89" />
     <PackageVersion Include="Diacritical.Net" Version="1.0.4" />
     <PackageVersion Include="DryIoc.dll" Version="5.4.3" />
     <PackageVersion Include="DryIoc.Microsoft.DependencyInjection" Version="6.2.0" />
@@ -18,7 +27,7 @@
     <PackageVersion Include="Ical.Net" Version="4.3.1" />
     <PackageVersion Include="ImpromptuInterface" Version="7.0.1" />
     <PackageVersion Include="LazyCache" Version="2.4.0" />
-    <PackageVersion Include="Mailkit" Version="4.8.0" />
+    <PackageVersion Include="MailKit" Version="4.18.2" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="6.0.35" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="2.1.7" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="6.0.2" />
@@ -48,7 +57,11 @@
     <PackageVersion Include="Selenium.WebDriver.ChromeDriver" Version="134.0.6998.16500" />
     <PackageVersion Include="Sentry" Version="4.0.2" />
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
-    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.7" />
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageVersion Include="MimeKit" Version="4.18.2" />
+    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <PackageVersion Include="StyleCop.Analyzers" Version="1.1.118" />
     <PackageVersion Include="Swashbuckle.AspNetCore.Annotations" Version="6.6.2" />
     <PackageVersion Include="Swashbuckle.AspNetCore.SwaggerGen" Version="6.6.2" />

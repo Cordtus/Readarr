@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -22,6 +21,8 @@ namespace NzbDrone.SysTray
         {
             _browserService = browserService;
             _lifecycle = lifecycle;
+
+            FormClosing += (_, _) => DisposeTrayIcon();
         }
 
         public void Start()
@@ -52,11 +53,6 @@ namespace NzbDrone.SysTray
         public Task StopAsync(CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
-        }
-
-        protected override void OnClosing(CancelEventArgs e)
-        {
-            DisposeTrayIcon();
         }
 
         protected override void OnLoad(EventArgs e)
